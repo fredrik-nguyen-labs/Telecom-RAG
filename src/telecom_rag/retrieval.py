@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Protocol
 
 import numpy as np
 from langchain_community.vectorstores import FAISS
@@ -41,6 +41,15 @@ class RetrievalResult:
     documents: list[Document]
     query: str
     mode: str
+
+
+class RetrieverProtocol(Protocol):
+    def retrieve(
+        self,
+        query: str,
+        k: int = TOP_K,
+        mode: str = "reranked",
+    ) -> RetrievalResult: ...
 
 
 class AdvancedRetriever:
