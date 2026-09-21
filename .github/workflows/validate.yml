@@ -1,0 +1,39 @@
+name: Validate repository
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  syntax-and-notebooks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Python sources
+        run: python -m compileall -q app.py scripts src
+
+      - name: Validate notebook and evaluation JSON
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          for path in sorted(Path("notebooks").glob("*.ipynb")):
+              with path.open(encoding="utf-8") as handle:
+                  notebook = json.load(handle)
+              assert notebook["nbformat"] == 4
+              assert notebook["cells"], f"{path} has no cells"
+              print(f"{path}: {len(notebook['cells'])} cells")
+
+          with Path("eval/questions.json").open(encoding="utf-8") as handle:
+              questions = json.load(handle)
+          assert questions, "Evaluation set is empty"
+          assert all("question" in item and "reference_answer" in item for item in questions)
+          print(f"eval/questions.json: {len(questions)} questions")
+          PY
