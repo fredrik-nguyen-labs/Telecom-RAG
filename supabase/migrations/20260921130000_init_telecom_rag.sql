@@ -255,6 +255,11 @@ create policy "public read kpi observations"
 revoke all on table public.document_chunks from anon, authenticated;
 grant select on table public.kpi_observations to anon, authenticated;
 
+-- Secret keys map to the service_role Postgres role. Explicit grants matter even
+-- when RLS is bypassed, because Postgres checks table privileges before RLS.
+grant all privileges on table public.document_chunks to service_role;
+grant all privileges on table public.kpi_observations to service_role;
+
 grant execute on function public.match_document_chunks(
     extensions.vector, integer, text, text
 ) to anon, authenticated;
@@ -265,3 +270,14 @@ grant execute on function public.hybrid_search_document_chunks(
 
 grant execute on function public.telecom_rag_status(text, text)
     to anon, authenticated;
+
+grant execute on function public.match_document_chunks(
+    extensions.vector, integer, text, text
+) to service_role;
+
+grant execute on function public.hybrid_search_document_chunks(
+    text, extensions.vector, integer, integer, text, text
+) to service_role;
+
+grant execute on function public.telecom_rag_status(text, text)
+    to service_role;
