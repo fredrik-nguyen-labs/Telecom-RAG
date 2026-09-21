@@ -383,3 +383,24 @@ python scripts/build_index.py
 ```
 
 The index manifest prevents the application from silently reusing the old MiniLM vectors. Streamlit/bootstrap also refreshes a legacy four-document corpus and rebuilds stale indexes automatically.
+
+
+---
+
+## Optional: Supabase hosted backend
+
+For notebooks and pure local development, no database is required: the project still uses local FAISS/BM25.
+
+For a persistent hosted deployment, configure Supabase. Full instructions are in `SUPABASE.md`.
+
+The short version:
+
+1. Create a Supabase project.
+2. Run `supabase/migrations/20260921130000_init_telecom_rag.sql` in the Supabase SQL Editor.
+3. In a trusted local/admin terminal set the project URL and Supabase secret key.
+4. Run `python scripts/sync_supabase.py`.
+5. For runtime, set `USE_SUPABASE=true`, the project URL, and the Supabase publishable key, then run `streamlit run app.py`.
+
+When Supabase is seeded, the Streamlit sidebar shows `Storage: Supabase Postgres + pgvector`.
+
+If Supabase is unavailable or not seeded, the app retains the local FAISS/BM25 fallback.
