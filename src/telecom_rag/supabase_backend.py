@@ -32,24 +32,40 @@ def supabase_runtime_configured() -> bool:
     return (
         _truthy(os.getenv("USE_SUPABASE"))
         and bool(os.getenv("SUPABASE_URL"))
-        and bool(os.getenv("SUPABASE_ANON_KEY"))
+        and bool(
+            os.getenv("SUPABASE_PUBLISHABLE_KEY")
+            or os.getenv("SUPABASE_ANON_KEY")
+        )
     )
 
 
 def supabase_admin_configured() -> bool:
     return bool(os.getenv("SUPABASE_URL")) and bool(
-        os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        os.getenv("SUPABASE_SECRET_KEY")
+        or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     )
+
+
+def _runtime_key() -> str | None:
+    return os.getenv("SUPABASE_PUBLISHABLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+
+
+def _admin_key() -> str | None:
+    return os.getenv("SUPABASE_SECRET_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 
 def get_supabase_client(admin: bool = False) -> Client:
     url = os.getenv("SUPABASE_URL")
-    key_name = "SUPABASE_SERVICE_ROLE_KEY" if admin else "SUPABASE_ANON_KEY"
-    key = os.getenv(key_name)
+    key = _admin_key() if admin else _runtime_key()
+    expected = (
+        "SUPABASE_SECRET_KEY (or legacy SUPABASE_SERVICE_ROLE_KEY)"
+        if admin
+        else "SUPABASE_PUBLISHABLE_KEY (or legacy SUPABASE_ANON_KEY)"
+    )
 
     if not url or not key:
         raise RuntimeError(
-            f"Supabase is not configured. Set SUPABASE_URL and {key_name}."
+            f"Supabase is not configured. Set SUPABASE_URL and {expected}."
         )
     return create_client(url, key)
 
