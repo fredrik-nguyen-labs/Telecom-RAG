@@ -30,6 +30,10 @@ LANDING_PAGE = "https://datadryad.org/dataset/doi:10.5061/dryad.wh70rxx06"
 ARCHIVE_NAME = "Ericsson_Amir.zip"
 DRYAD_FILE_ID = "4078259"
 DOWNLOAD_URL = f"https://datadryad.org/downloads/file_stream/{DRYAD_FILE_ID}"
+# Dryad's legacy file-stream endpoint may be blocked by its anti-bot layer.
+# This API endpoint assembles the same pinned May 21, 2025 release and returns
+# a short-lived signed ZIP URL without requiring an API token.
+API_DOWNLOAD_URL = "https://datadryad.org/api/v2/versions/365672/download"
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DOWNLOAD_DIR = PROJECT_ROOT / "data" / "downloads"
@@ -78,37 +82,41 @@ def download_archive(force: bool = False) -> None:
     print(f"Downloading {ARCHIVE_NAME}")
     print(f"Source: {LANDING_PAGE}")
 
-    try:
-        with requests.get(
-            DOWNLOAD_URL,
-            headers=headers,
-            stream=True,
-            timeout=(15, 120),
-            allow_redirects=True,
-        ) as response:
-            response.raise_for_status()
-            with tmp_path.open("wb") as handle:
-                for chunk in response.iter_content(chunk_size=1024 * 1024):
-                    if chunk:
-                        handle.write(chunk)
-    except requests.RequestException as exc:
-        tmp_path.unlink(missing_ok=True)
-        raise RuntimeError(
-            "Dryad download failed. Open the dataset landing page shown above, "
-            f"download '{ARCHIVE_NAME}' from the May 21, 2025 version, and place "
-            f"it at: {ARCHIVE_PATH}"
-        ) from exc
+    last_error: Exception | None = None
+    urls = (DOWNLOAD_URL, API_DOWNLOAD_URL)
+    for index, url in enumerate(urls):
+        try:
+            with requests.get(
+                url,
+                headers=headers,
+                stream=True,
+                timeout=(15, 120),
+                allow_redirects=True,
+            ) as response:
+                response.raise_for_status()
+                with tmp_path.open("wb") as handle:
+                    for chunk in response.iter_content(chunk_size=1024 * 1024):
+                        if chunk:
+                            handle.write(chunk)
 
-    if not zipfile.is_zipfile(tmp_path):
-        tmp_path.unlink(missing_ok=True)
-        raise RuntimeError(
-            "The downloaded response is not a ZIP archive. "
-            f"Manually download '{ARCHIVE_NAME}' from {LANDING_PAGE} "
-            f"and place it at {ARCHIVE_PATH}."
-        )
+            if zipfile.is_zipfile(tmp_path):
+                tmp_path.replace(ARCHIVE_PATH)
+                print(f"Saved: {ARCHIVE_PATH}")
+                return
 
-    tmp_path.replace(ARCHIVE_PATH)
-    print(f"Saved: {ARCHIVE_PATH}")
+            last_error = RuntimeError(f"Response from {url} was not a ZIP archive")
+            tmp_path.unlink(missing_ok=True)
+            if index + 1 < len(urls):
+                print(f"Download endpoint did not return a ZIP; trying fallback: {urls[index + 1]}")
+        except requests.RequestException as exc:
+            last_error = exc
+            tmp_path.unlink(missing_ok=True)
+
+    raise RuntimeError(
+        "Dryad download failed. Open the dataset landing page shown above, "
+        f"download '{ARCHIVE_NAME}' from the May 21, 2025 version, and place "
+        f"it at: {ARCHIVE_PATH}"
+    ) from last_error
 
 
 def safe_extract_zip(archive: Path, destination: Path) -> None:
@@ -152,6 +160,19 @@ def extract_archive(force: bool = False) -> None:
 
     print(f"Extracting to: {RAW_DIR}")
     safe_extract_zip(ARCHIVE_PATH, RAW_DIR)
+
+    # The Dryad API version-download endpoint returns a release bundle.  The
+    # requested data archive is one level inside that bundle, whereas the
+    # legacy file-stream endpoint returns it directly.
+    try:
+        validate_extracted_data()
+    except RuntimeError:
+        nested_archives = sorted(RAW_DIR.rglob("*.zip"))
+        if not nested_archives:
+            raise
+        nested_archive = nested_archives[0]
+        print(f"Extracting nested data archive: {nested_archive}")
+        safe_extract_zip(nested_archive, RAW_DIR)
 
 
 def write_metadata(extracted_files: list[str]) -> None:
