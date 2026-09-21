@@ -13,12 +13,19 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from sentence_transformers import SentenceTransformer
 
-from .config import EMBEDDING_MODEL, OLLAMA_MODEL, OPENAI_MODEL, TOP_K, VECTOR_STORE_DIR
+from .config import (
+    EMBEDDING_MODEL,
+    MAX_OUTPUT_TOKENS,
+    OLLAMA_MODEL,
+    OPENAI_MODEL,
+    TOP_K,
+    VECTOR_STORE_DIR,
+)
 from .documents import chunk_documents, load_documents
 
 
 class LocalSentenceTransformerEmbeddings(Embeddings):
-    """A tiny LangChain Embeddings adapter around sentence-transformers."""
+    """Small LangChain Embeddings adapter around sentence-transformers."""
 
     def __init__(self, model_name: str = EMBEDDING_MODEL):
         self.model_name = model_name
@@ -77,17 +84,28 @@ def load_vector_store(
 
 
 def get_llm(provider: str = "ollama", model: str | None = None) -> BaseChatModel:
+    """Return a deterministic, bounded-output chat model for the demo."""
     provider = provider.lower().strip()
     if provider == "ollama":
         from langchain_ollama import ChatOllama
 
-        return ChatOllama(model=model or OLLAMA_MODEL, temperature=0)
+        return ChatOllama(
+            model=model or OLLAMA_MODEL,
+            temperature=0,
+            num_predict=MAX_OUTPUT_TOKENS,
+        )
     if provider == "openai":
         if not os.getenv("OPENAI_API_KEY"):
             raise RuntimeError("OPENAI_API_KEY is not set.")
         from langchain_openai import ChatOpenAI
 
-        return ChatOpenAI(model=model or OPENAI_MODEL, temperature=0)
+        return ChatOpenAI(
+            model=model or OPENAI_MODEL,
+            temperature=0,
+            max_tokens=MAX_OUTPUT_TOKENS,
+            timeout=45,
+            max_retries=1,
+        )
     raise ValueError("provider must be 'ollama' or 'openai'")
 
 
