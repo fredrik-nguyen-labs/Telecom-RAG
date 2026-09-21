@@ -12,18 +12,22 @@ import streamlit as st
 
 from telecom_rag.bootstrap import ensure_demo_assets
 from telecom_rag.config import (
-    DOCS_DIR,
     MAX_QUESTION_CHARS,
     MAX_REQUEST_UNITS_PER_SESSION,
     MAX_TOP_K_PUBLIC,
     OPENAI_MODEL,
     OLLAMA_MODEL,
     PROCESSED_KPI_PATH,
-    VECTOR_STORE_DIR,
 )
 from telecom_rag.data import load_processed_kpis
 from telecom_rag.graph import build_graph
 from telecom_rag.rag import get_llm, load_advanced_retriever
+from telecom_rag.supabase_backend import (
+    get_supabase_status,
+    load_kpis_from_supabase,
+    load_supabase_retriever,
+    supabase_runtime_configured,
+)
 
 
 st.set_page_config(
@@ -44,19 +48,27 @@ def _read_secret(name: str) -> str | None:
 
 # Streamlit Community Cloud secrets are copied into environment variables so the
 # rest of the project can use the same code path as local development.
-for secret_name in ("OPENAI_API_KEY", "OPENAI_MODEL"):
+for secret_name in (
+    "OPENAI_API_KEY",
+    "OPENAI_MODEL",
+    "USE_SUPABASE",
+    "SUPABASE_URL",
+    "SUPABASE_ANON_KEY",
+):
     secret_value = _read_secret(secret_name)
     if secret_value and not os.getenv(secret_name):
         os.environ[secret_name] = secret_value
 
 
-@st.cache_resource(show_spinner="Preparing the reproducible demo assets...")
+@st.cache_resource(show_spinner="Preparing local demo assets...")
 def cached_bootstrap():
     return ensure_demo_assets()
 
 
-@st.cache_resource(show_spinner="Loading BGE, BM25 and FAISS retrieval...")
-def cached_retriever():
+@st.cache_resource(show_spinner="Loading retrieval backend...")
+def cached_retriever(backend: str):
+    if backend == "supabase":
+        return load_supabase_retriever()
     return load_advanced_retriever(build_if_missing=False)
 
 
@@ -66,7 +78,11 @@ def cached_llm(provider: str, model: str):
 
 
 @st.cache_data(show_spinner=False)
-def cached_kpis() -> pd.DataFrame | None:
+def cached_kpis(backend: str) -> pd.DataFrame | None:
+    if backend == "supabase":
+        df = load_kpis_from_supabase()
+        return None if df.empty else df
+
     if not PROCESSED_KPI_PATH.exists():
         return None
     return load_processed_kpis()
@@ -78,26 +94,60 @@ if "request_units_used" not in st.session_state:
 
 st.title("📡 5G Network Diagnostics RAG Assistant")
 st.caption(
-    "Real Ericsson/AERPAW KPI measurements + LangGraph + LangChain + FAISS + grounded LLM answers."
+    "Real Ericsson/AERPAW KPI measurements + LangGraph + hybrid retrieval + "
+    "Supabase/pgvector or local FAISS + grounded LLM answers."
 )
 
-bootstrap = cached_bootstrap()
 
-if not bootstrap.docs_ready or not bootstrap.vector_ready:
-    st.error(
-        "The RAG corpus or vector index could not be prepared on this server. "
-        "Open the deployment details below for the exact bootstrap error."
-    )
-    with st.expander("Deployment bootstrap details", expanded=True):
-        st.write("KPI:", bootstrap.kpi_message)
-        st.write("Documents:", bootstrap.docs_message)
-        st.write("FAISS:", bootstrap.vector_message)
-    st.stop()
+# Prefer persistent Supabase storage when configured and seeded. If credentials are
+# missing, the migration was not applied, or the database is empty, retain the fully
+# reproducible local FAISS fallback.
+supabase_status: dict = {}
+supabase_error: str | None = None
+using_supabase = False
 
-kpis = cached_kpis() if bootstrap.kpi_ready else None
+if supabase_runtime_configured():
+    try:
+        supabase_status = get_supabase_status()
+        using_supabase = int(supabase_status.get("document_chunks_current", 0)) > 0
+    except Exception as exc:
+        supabase_error = str(exc)
+
+storage_backend = "supabase" if using_supabase else "local"
+
+if using_supabase:
+    bootstrap = None
+    kpis = cached_kpis("supabase")
+else:
+    bootstrap = cached_bootstrap()
+
+    if not bootstrap.docs_ready or not bootstrap.vector_ready:
+        st.error(
+            "Neither the hosted Supabase RAG store nor the local RAG assets are ready."
+        )
+        if supabase_runtime_configured():
+            st.info(
+                "Supabase is configured but not seeded/available. Apply the SQL migration "
+                "and run python scripts/sync_supabase.py, or fix the local bootstrap."
+            )
+        with st.expander("Deployment/bootstrap details", expanded=True):
+            if supabase_error:
+                st.write("Supabase:", supabase_error)
+            elif supabase_runtime_configured():
+                st.write("Supabase status:", supabase_status)
+            st.write("KPI:", bootstrap.kpi_message)
+            st.write("Documents:", bootstrap.docs_message)
+            st.write("Local FAISS:", bootstrap.vector_message)
+        st.stop()
+
+    kpis = cached_kpis("local") if bootstrap.kpi_ready else None
+
 
 openai_available = bool(os.getenv("OPENAI_API_KEY"))
-remaining_units = max(0, MAX_REQUEST_UNITS_PER_SESSION - st.session_state.request_units_used)
+remaining_units = max(
+    0, MAX_REQUEST_UNITS_PER_SESSION - st.session_state.request_units_used
+)
+
 
 with st.sidebar:
     st.header("Demo controls")
@@ -105,15 +155,19 @@ with st.sidebar:
     if openai_available:
         provider = "openai"
         model = os.getenv("OPENAI_MODEL", OPENAI_MODEL)
-        st.success("Hosted model configured")
+        st.success("Hosted LLM configured")
         st.caption(f"Provider: OpenAI · Model: {model}")
     else:
         provider = st.selectbox("LLM provider", ["ollama", "openai"], index=0)
         if provider == "ollama":
-            model = st.text_input("Ollama model", value=os.getenv("OLLAMA_MODEL", OLLAMA_MODEL))
+            model = st.text_input(
+                "Ollama model", value=os.getenv("OLLAMA_MODEL", OLLAMA_MODEL)
+            )
             st.caption("Local/free. Start Ollama before running the app.")
         else:
-            model = st.text_input("OpenAI model", value=os.getenv("OPENAI_MODEL", OPENAI_MODEL))
+            model = st.text_input(
+                "OpenAI model", value=os.getenv("OPENAI_MODEL", OPENAI_MODEL)
+            )
             st.warning("OPENAI_API_KEY is not configured.")
 
     use_rag = st.toggle("Use RAG", value=True)
@@ -122,8 +176,8 @@ with st.sidebar:
         ["reranked", "hybrid", "dense"],
         index=0,
         help=(
-            "reranked = BGE dense + BM25 + reciprocal-rank fusion + cross-encoder; "
-            "hybrid = BGE + BM25 + fusion; dense = BGE/FAISS only."
+            "Local: BGE/FAISS + BM25 + RRF. Supabase: pgvector + Postgres FTS + RRF. "
+            "Reranked mode applies the same cross-encoder after either backend."
         ),
     )
     compare = st.toggle(
@@ -143,20 +197,32 @@ with st.sidebar:
     st.metric("Request units left in this session", remaining_units)
     st.caption(
         "One answer = 1 unit. Enabling the baseline comparison uses 2 units. "
-        "This browser-session limit is only a convenience guardrail; the API project's "
+        "This browser-session limit is a convenience guardrail; the API project's "
         "hard spend limit is the real billing protection."
     )
 
     st.divider()
     st.subheader("Project state")
-    st.write("KPI table:", "✅" if bootstrap.kpi_ready else "⚠️ docs-only")
-    st.write("RAG sources:", "✅" if bootstrap.docs_ready else "❌")
-    st.write("FAISS index:", "✅" if bootstrap.vector_ready else "❌")
-
-    with st.expander("Bootstrap details"):
-        st.write("KPI:", bootstrap.kpi_message)
-        st.write("Documents:", bootstrap.docs_message)
-        st.write("FAISS:", bootstrap.vector_message)
+    if using_supabase:
+        st.success("Storage: Supabase Postgres + pgvector")
+        st.write(
+            "Current document chunks:",
+            f"{int(supabase_status.get('document_chunks_current', 0)):,}",
+        )
+        st.write(
+            "KPI observations:",
+            f"{int(supabase_status.get('kpi_observations', 0)):,}",
+        )
+        st.write("Vector index:", "✅ HNSW")
+    else:
+        st.info("Storage: local reproducible fallback")
+        st.write("KPI table:", "✅" if bootstrap and bootstrap.kpi_ready else "⚠️ docs-only")
+        st.write("RAG sources:", "✅" if bootstrap and bootstrap.docs_ready else "❌")
+        st.write("FAISS index:", "✅" if bootstrap and bootstrap.vector_ready else "❌")
+        if supabase_runtime_configured() and not using_supabase:
+            st.warning("Supabase configured but not seeded; using local storage.")
+            with st.expander("Supabase status/error"):
+                st.write(supabase_error or supabase_status)
 
     with st.expander("About this project"):
         st.markdown(
@@ -169,12 +235,14 @@ with st.sidebar:
             - the exact AERPAW Ericsson experiment,
             - Ericsson material on beamforming, coverage/capacity and network performance.
 
-            **Retrieval:** BGE dense search + BM25 lexical search + reciprocal-rank fusion
+            **Retrieval:** BGE dense retrieval + lexical retrieval + reciprocal-rank fusion
             + cross-encoder reranking.
 
-            The app distinguishes measured KPI evidence from retrieved technical knowledge.
+            **Storage:** Supabase/Postgres + pgvector in the hosted configuration, with
+            local FAISS/BM25 retained as the notebook/development baseline.
             """
         )
+
 
 observation = None
 
@@ -185,18 +253,22 @@ with left:
 
     if kpis is None or kpis.empty:
         st.info(
-            "The KPI dataset could not be prepared on this server, so this deployment is "
-            "running in documentation-only RAG mode. The RAG chatbot still works."
+            "No KPI observations are available in the active backend, so the app is "
+            "running in documentation-only RAG mode."
         )
     else:
         if "anomaly_score" in kpis.columns:
-            default_df = kpis.sort_values("anomaly_score", ascending=False, na_position="last")
+            default_df = kpis.sort_values(
+                "anomaly_score", ascending=False, na_position="last"
+            )
         else:
             default_df = kpis
 
         choices = default_df["observation_id"].astype(str).tolist()
         selected_id = st.selectbox("Observation", choices)
-        row = kpis.loc[kpis["observation_id"].astype(str) == selected_id].iloc[0]
+        row = kpis.loc[
+            kpis["observation_id"].astype(str) == selected_id
+        ].iloc[0]
         observation = row.to_dict()
 
         show_cols = [
@@ -226,6 +298,7 @@ with left:
             hide_index=True,
             use_container_width=True,
         )
+
 
 with right:
     st.subheader("2. Ask a question")
@@ -270,12 +343,12 @@ if run:
         st.error(f"Question must be at most {MAX_QUESTION_CHARS} characters.")
         st.stop()
 
-    # Reserve the units before the API call. A failed request can still consume provider
-    # resources, so the conservative choice is not to refund it automatically.
+    # Reserve units before the call. A failed provider request can still consume
+    # resources, so the public-demo counter is conservative.
     st.session_state.request_units_used += units_needed
 
     try:
-        retriever = cached_retriever()
+        retriever = cached_retriever(storage_backend)
         llm = cached_llm(provider, model)
         graph = build_graph(
             llm,
@@ -297,12 +370,17 @@ if run:
         st.subheader("Answer")
         st.markdown(result["answer"])
 
-        meta_cols = st.columns(5)
+        meta_cols = st.columns(6)
         meta_cols[0].metric("Route", result.get("route", "-"))
         meta_cols[1].metric("RAG", "On" if use_rag else "Off")
-        meta_cols[2].metric("Retrieval", result.get("retrieval_mode", retrieval_mode))
-        meta_cols[3].metric("Chunks", len(result.get("sources", [])))
-        meta_cols[4].metric("Latency", f"{result.get('latency_s', 0):.2f} s")
+        meta_cols[2].metric("Storage", "Supabase" if using_supabase else "Local")
+        meta_cols[3].metric(
+            "Retrieval", result.get("retrieval_mode", retrieval_mode)
+        )
+        meta_cols[4].metric("Chunks", len(result.get("sources", [])))
+        meta_cols[5].metric(
+            "Latency", f"{result.get('latency_s', 0):.2f} s"
+        )
 
         if result.get("retrieval_query"):
             with st.expander("Retrieval query"):
@@ -315,16 +393,30 @@ if run:
         if result.get("sources"):
             st.subheader("Retrieved sources")
             for source in result["sources"]:
-                page = f" — page {source['page']}" if source.get("page") else ""
-                section = f" — {source['section']}" if source.get("section") else ""
+                page = (
+                    f" — page {source['page']}"
+                    if source.get("page")
+                    else ""
+                )
+                section = (
+                    f" — {source['section']}"
+                    if source.get("section")
+                    else ""
+                )
                 with st.expander(
                     f"[{source['citation']}] {source['source']}{page}{section}"
                 ):
+                    details = []
                     if source.get("retrieval_methods"):
-                        st.caption(
-                            f"Retrieved by: {source['retrieval_methods']} · "
-                            f"rerank score: {source.get('rerank_score')}"
+                        details.append(
+                            f"retrieved by {source['retrieval_methods']}"
                         )
+                    if source.get("rerank_score") is not None:
+                        details.append(
+                            f"rerank score {source['rerank_score']:.3f}"
+                        )
+                    if details:
+                        st.caption(" · ".join(details))
                     st.write(source["excerpt"])
 
         if compare and use_rag:
@@ -350,8 +442,9 @@ if run:
 
     except Exception as exc:
         st.error(
-            "The request failed. If this is the public deployment, common causes are an "
-            "exhausted API balance, a project spend limit, or a temporary provider error."
+            "The request failed. Common hosted causes are an exhausted LLM API balance, "
+            "an OpenAI spend limit, missing Supabase migration/data, or a temporary "
+            "provider error."
         )
         with st.expander("Technical error"):
             st.exception(exc)
