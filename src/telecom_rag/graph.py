@@ -3,12 +3,12 @@ from __future__ import annotations
 from typing import Any, Literal, TypedDict
 
 import pandas as pd
-from langchain_community.vectorstores import FAISS
 from langchain_core.language_models.chat_models import BaseChatModel
 from langgraph.graph import END, START, StateGraph
 
 from .kpi import summarize_observation
-from .rag import answer_with_rag, answer_without_rag, retrieve
+from .rag import answer_with_rag, answer_without_rag
+from .retrieval import AdvancedRetriever, build_retrieval_query
 
 
 class AppState(TypedDict, total=False):
@@ -16,6 +16,8 @@ class AppState(TypedDict, total=False):
     use_rag: bool
     observation: dict[str, Any] | None
     kpi_context: str
+    retrieval_query: str
+    retrieval_mode: str
     retrieved_docs: list[Any]
     answer: str
     sources: list[dict[str, Any]]
@@ -25,21 +27,22 @@ class AppState(TypedDict, total=False):
 
 KPI_TERMS = {
     "observation", "throughput", "rsrp", "rsrq", "sinr", "cqi", "mcs",
-    "cell", "kpi", "signal", "performance",
+    "cell", "kpi", "signal", "performance", "radio", "quality",
 }
 
 
 def build_graph(
     llm: BaseChatModel,
-    store: FAISS,
+    retriever: AdvancedRetriever,
     reference_df: pd.DataFrame | None = None,
     top_k: int = 4,
+    retrieval_mode: str = "reranked",
 ):
-    """Build a deliberately small LangGraph workflow.
+    """Build the conditional KPI + advanced-RAG workflow.
 
-    The graph is useful rather than decorative: it only runs KPI analysis when the user
-    supplies an observation and asks a KPI-related question, while documentation-only
-    questions skip that node.
+    Retrieval gets a compact query derived from the question/KPI names, while the full
+    numeric KPI context is kept for generation. This avoids polluting the embedding query
+    with percentiles, timestamps, anomaly scores and raw values.
     """
 
     def route_node(state: AppState) -> AppState:
@@ -58,12 +61,22 @@ def build_graph(
         return {"kpi_context": summarize_observation(row, reference_df)}
 
     def retrieve_node(state: AppState) -> AppState:
+        query = build_retrieval_query(
+            state["question"],
+            observation=state.get("observation") if state.get("route") == "kpi+docs" else None,
+        )
         if not state.get("use_rag", True):
-            return {"retrieved_docs": []}
-        query = state["question"]
-        if state.get("kpi_context"):
-            query += "\n" + state["kpi_context"]
-        return {"retrieved_docs": retrieve(store, query, k=top_k)}
+            return {
+                "retrieval_query": query,
+                "retrieval_mode": retrieval_mode,
+                "retrieved_docs": [],
+            }
+        result = retriever.retrieve(query, k=top_k, mode=retrieval_mode)
+        return {
+            "retrieval_query": result.query,
+            "retrieval_mode": result.mode,
+            "retrieved_docs": result.documents,
+        }
 
     def generate_node(state: AppState) -> AppState:
         if state.get("use_rag", True):
