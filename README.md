@@ -7,21 +7,26 @@ The project combines:
 - real Ericsson/AERPAW 5G NSA KPI measurements,
 - reproducible pandas/scikit-learn analysis,
 - public telecom standards/documentation,
-- local SentenceTransformer embeddings,
-- FAISS semantic retrieval,
+- BGE retrieval embeddings,
+- FAISS dense search + BM25 lexical search,
+- reciprocal-rank fusion + cross-encoder reranking,
 - LangChain components,
 - LangGraph orchestration,
 - the same LLM **with vs without RAG** evaluation,
 - a Streamlit demo.
 
-For local setup and the exact run order, see **[RUNNING.md](RUNNING.md)**. For the public Streamlit deployment, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.\n\nThe central idea is deliberately simple:
+For local setup and the exact run order, see **[RUNNING.md](RUNNING.md)**. For the public Streamlit deployment, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.The central idea is deliberately simple:
 
 ```text
 KPI measurements                    Technical documents
 (the case to diagnose)              (knowledge used to explain it)
        |                                      |
        v                                      v
-pandas / anomaly analysis       chunk -> embed -> FAISS retrieval
+pandas / anomaly analysis       section-aware chunking
+                                      |
+                              BGE dense + BM25
+                                      |
+                              RRF + cross-encoder
        |                                      |
        +------------------+-------------------+
                           v
@@ -75,12 +80,18 @@ Run:
 python scripts/download_docs.py
 ```
 
-The starter corpus is intentionally small and high-quality:
+The corpus currently configures **10 focused sources**:
 
 - ETSI / 3GPP TS 38.215 — NR physical-layer measurements
-- ETSI / 3GPP TS 38.214 — physical-layer procedures for data
-- AERPAW description of the exact Ericsson dataset
-- AERPAW Ericsson experiment post-processing documentation
+- ETSI / 3GPP TS 38.214 — NR physical-layer procedures for data
+- ETSI / 3GPP TS 38.300 — NR / NG-RAN overall description
+- ETSI / 3GPP TS 36.214 — LTE physical-layer measurements
+- AERPAW Ericsson dataset description
+- AERPAW Ericsson post-processing documentation
+- Ericsson material on Massive MIMO / beamforming
+- Ericsson traffic-pattern and capacity/coverage analysis
+- Ericsson network-performance optimization material
+- Ericsson Mobility Report June 2025
 
 Downloaded third-party files are excluded from Git; the URLs and download script are committed for reproducibility.
 
@@ -159,16 +170,20 @@ Explains and performs:
 Explains and performs:
 
 - document loading and PDF extraction,
-- chunking,
-- SentenceTransformer embeddings,
-- FAISS indexing,
-- retrieval inspection,
+- section-aware contextual chunking,
+- BGE retrieval embeddings,
+- FAISS dense search,
+- BM25 lexical search,
+- reciprocal-rank fusion,
+- cross-encoder reranking,
+- dense vs hybrid vs reranked retrieval ablation,
 - LangGraph workflow construction,
 - documentation-only questions,
 - KPI-aware questions,
-- retrieval Hit@k evaluation,
-- **same LLM: LLM-only vs RAG** comparison,
-- semantic similarity, required-fact recall, citation rate and latency analysis.
+- source hit/recall/precision and MRR evaluation,
+- a 20-question benchmark split into general, corpus-specific, applied-diagnostic and cross-source categories,
+- **same LLM: LLM-only vs final reranked RAG** comparison,
+- semantic similarity, required-fact recall, citation validity, context-support proxy and latency analysis.
 
 ## 5. Run without notebooks
 
@@ -283,20 +298,41 @@ Telecom-RAG/
     ├── kpi.py
     ├── documents.py
     ├── rag.py
+    ├── retrieval.py
     ├── graph.py
     └── evaluation.py
 ```
 
-## 10. Good next experiments
+## 10. Retrieval architecture
 
-Once the baseline works, the most useful extensions are measurable ones:
+The default retrieval path is now:
 
-- chunk-size ablation,
-- top-k ablation,
-- embedding-model comparison,
-- reranking,
-- more troubleshooting-oriented public documentation,
-- better evaluation cases built from the corpus,
-- richer anomaly detection / KPI-conditioned retrieval.
+```text
+question
+  ↓
+clean retrieval query
+  ↓
+BGE/FAISS top-15      BM25 top-15
+       \                /
+        reciprocal-rank fusion
+                 ↓
+          ~20 candidates
+                 ↓
+      cross-encoder reranking
+                 ↓
+             top-4
+                 ↓
+               LLM
+```
+
+The Streamlit UI also exposes `dense`, `hybrid`, and `reranked` modes so the retrieval ablation can be demonstrated without changing code.
+
+The detailed numeric KPI summary is **not** appended to the embedding query anymore. Only compact KPI concepts are used for retrieval; full values/percentiles are supplied later to the generator.
+
+## 11. Evaluation philosophy
+
+The benchmark is deliberately harder than the original definition-heavy version. Generic questions remain, but the majority now test corpus-specific facts, exact standards/files, applied Ericsson performance explanations, and cross-source retrieval.
+
+Useful next experiments are still controlled ablations: chunk size, candidate counts, final top-k, BGE-small vs BGE-base, corpus subsets, and reranker on/off.
 
 The project intentionally avoids hard-coding unsupported “good/bad” KPI thresholds and avoids unnecessary multi-agent complexity.
