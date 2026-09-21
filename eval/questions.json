@@ -1,72 +1,301 @@
 [
   {
     "id": "q01",
+    "category": "general_telecom",
+    "difficulty": "easy",
     "question": "What is RSRP used to measure in an NR radio link?",
     "reference_answer": "RSRP is a received reference-signal power measurement used to characterize received signal strength for specified NR reference signals.",
-    "required_terms": ["power", "reference", "signal"],
-    "expected_source_id": "etsi_ts_138215_v18_5_0"
+    "required_terms": [
+      "power",
+      "reference",
+      "signal"
+    ],
+    "expected_source_ids": [
+      "etsi_ts_138215_v18_5_0"
+    ]
   },
   {
     "id": "q02",
+    "category": "general_telecom",
+    "difficulty": "easy",
     "question": "What kind of quantity is SINR and why is it useful when examining radio conditions?",
-    "reference_answer": "SINR compares desired signal power with interference and noise, so it indicates signal quality under interference/noise rather than signal strength alone.",
-    "required_terms": ["signal", "interference", "noise"],
-    "expected_source_id": "etsi_ts_138215_v18_5_0"
+    "reference_answer": "SINR relates desired signal power to interference and noise, so it provides information about radio quality beyond received signal strength alone.",
+    "required_terms": [
+      "signal",
+      "interference",
+      "noise"
+    ],
+    "expected_source_ids": [
+      "etsi_ts_138215_v18_5_0"
+    ]
   },
   {
     "id": "q03",
+    "category": "general_telecom",
+    "difficulty": "easy",
     "question": "What does CQI communicate to the network in NR?",
-    "reference_answer": "CQI reports channel quality information that supports selection of suitable downlink transmission parameters such as modulation and coding.",
-    "required_terms": ["channel", "quality", "downlink"],
-    "expected_source_id": "etsi_ts_138214_v18_10_0"
+    "reference_answer": "CQI reports channel quality information used by NR procedures to support suitable downlink transmission parameters such as modulation and coding.",
+    "required_terms": [
+      "channel",
+      "quality",
+      "downlink"
+    ],
+    "expected_source_ids": [
+      "etsi_ts_138214_v18_10_0"
+    ]
   },
   {
     "id": "q04",
+    "category": "general_telecom",
+    "difficulty": "easy",
     "question": "What is the role of MCS in NR data transmission?",
-    "reference_answer": "The modulation and coding scheme determines the modulation order and coding behavior used for data transmission, affecting robustness and achievable data rate.",
-    "required_terms": ["modulation", "coding"],
-    "expected_source_id": "etsi_ts_138214_v18_10_0"
+    "reference_answer": "The modulation and coding scheme determines modulation and coding behavior for data transmission, affecting robustness and achievable data rate.",
+    "required_terms": [
+      "modulation",
+      "coding"
+    ],
+    "expected_source_ids": [
+      "etsi_ts_138214_v18_10_0"
+    ]
   },
   {
     "id": "q05",
+    "category": "corpus_specific",
+    "difficulty": "medium",
     "question": "What deployment type was used in the AERPAW Ericsson dataset?",
     "reference_answer": "The experiment used an Ericsson 5G Non-Standalone (NSA) network.",
-    "required_terms": ["5g", "non-standalone"],
-    "expected_source_id": "aerpaw_ericsson_dataset"
+    "required_terms": [
+      "5g",
+      "non-standalone"
+    ],
+    "expected_source_ids": [
+      "aerpaw_ericsson_dataset"
+    ]
   },
   {
     "id": "q06",
+    "category": "corpus_specific",
+    "difficulty": "medium",
     "question": "At what UAV altitude were the Ericsson 5G NSA measurements collected?",
     "reference_answer": "The UAV measurements were collected at approximately 30 meters altitude.",
-    "required_terms": ["30", "meter"],
-    "expected_source_id": "aerpaw_ericsson_dataset"
+    "required_terms": [
+      "30",
+      "meter"
+    ],
+    "expected_source_ids": [
+      "aerpaw_ericsson_dataset"
+    ]
   },
   {
     "id": "q07",
+    "category": "corpus_specific",
+    "difficulty": "medium",
     "question": "Which radio and performance KPIs are highlighted in the AERPAW Ericsson dataset?",
     "reference_answer": "The dataset includes LTE/NR measurements such as RSRP, SINR, CQI, MCS and throughput, together with cell and location information.",
-    "required_terms": ["rsrp", "sinr", "cqi", "mcs", "throughput"],
-    "expected_source_id": "aerpaw_ericsson_dataset"
+    "required_terms": [
+      "rsrp",
+      "sinr",
+      "cqi",
+      "mcs",
+      "throughput"
+    ],
+    "expected_source_ids": [
+      "aerpaw_ericsson_dataset"
+    ]
   },
   {
     "id": "q08",
+    "category": "corpus_specific",
+    "difficulty": "medium",
     "question": "What equipment was mounted on the UAV to collect the Ericsson 5G measurements?",
-    "reference_answer": "A small portable node equipped with a Quectel 5G modem was carried by the UAV.",
-    "required_terms": ["portable", "quectel", "modem"],
-    "expected_source_id": "aerpaw_ericsson_dataset"
+    "reference_answer": "A portable node equipped with a Quectel 5G modem was carried by the UAV.",
+    "required_terms": [
+      "portable",
+      "quectel",
+      "modem"
+    ],
+    "expected_source_ids": [
+      "aerpaw_ericsson_dataset"
+    ]
   },
   {
     "id": "q09",
+    "category": "corpus_specific",
+    "difficulty": "hard",
     "question": "Which log files are used for RF and PHY post-processing in the AERPAW Ericsson workflow?",
     "reference_answer": "The workflow uses serving-cell radio logs such as Serving_cell_Params_ENDC.csv and PHY logs such as Basic_and_Other_Params.csv, together with vehicle telemetry for alignment.",
-    "required_terms": ["serving_cell", "basic_and_other", "vehicle"],
-    "expected_source_id": "aerpaw_post_processing"
+    "required_terms": [
+      "serving_cell",
+      "basic_and_other",
+      "vehicle"
+    ],
+    "expected_source_ids": [
+      "aerpaw_post_processing"
+    ]
   },
   {
     "id": "q10",
+    "category": "corpus_specific",
+    "difficulty": "hard",
     "question": "Why is the vehicle telemetry log useful when post-processing the radio measurements?",
     "reference_answer": "Vehicle telemetry supplies synchronized position, orientation, velocity and time information so radio measurements can be associated with where and how the UAV was moving.",
-    "required_terms": ["position", "time"],
-    "expected_source_id": "aerpaw_post_processing"
+    "required_terms": [
+      "position",
+      "time"
+    ],
+    "expected_source_ids": [
+      "aerpaw_post_processing"
+    ]
+  },
+  {
+    "id": "q11",
+    "category": "standard_specific",
+    "difficulty": "medium",
+    "question": "Which 3GPP specification in this corpus gives the overall description of NR and NG-RAN?",
+    "reference_answer": "3GPP TS 38.300 is the NR and NG-RAN overall description and stage-2 specification.",
+    "required_terms": [
+      "38.300",
+      "nr",
+      "ng-ran"
+    ],
+    "expected_source_ids": [
+      "etsi_ts_138300_v18_5_0"
+    ]
+  },
+  {
+    "id": "q12",
+    "category": "standard_specific",
+    "difficulty": "medium",
+    "question": "Which specification in the corpus defines LTE physical-layer measurements?",
+    "reference_answer": "3GPP TS 36.214 covers E-UTRA/LTE physical-layer measurements.",
+    "required_terms": [
+      "36.214",
+      "lte",
+      "measurements"
+    ],
+    "expected_source_ids": [
+      "etsi_ts_136214_v18_0_0"
+    ]
+  },
+  {
+    "id": "q13",
+    "category": "applied_diagnostics",
+    "difficulty": "hard",
+    "question": "Why can SSB RSRP or SINR be a weak predictor of actual NR downlink data performance?",
+    "reference_answer": "In NR, SSB transmission is decoupled from PDSCH data transmission, while traffic beams address the data phase, so SSB RSRP/SINR need not directly track data performance.",
+    "required_terms": [
+      "ssb",
+      "pdsch",
+      "traffic beams"
+    ],
+    "expected_source_ids": [
+      "ericsson_massive_mimo_beamforming"
+    ]
+  },
+  {
+    "id": "q14",
+    "category": "applied_diagnostics",
+    "difficulty": "medium",
+    "question": "According to the Ericsson traffic-pattern analysis, what two network dimensions must be available to achieve optimum 5G performance?",
+    "reference_answer": "Both coverage and capacity need to be available according to location-specific demand.",
+    "required_terms": [
+      "coverage",
+      "capacity"
+    ],
+    "expected_source_ids": [
+      "ericsson_traffic_patterns"
+    ]
+  },
+  {
+    "id": "q15",
+    "category": "applied_diagnostics",
+    "difficulty": "hard",
+    "question": "What network-performance improvement was reported for the MásMóvil reinforcement-learning optimization example?",
+    "reference_answer": "The Ericsson article reports that MásMóvil increased downlink user throughput by 12 percent in busy hours using reinforcement learning to optimize RET while keeping similar traffic volume.",
+    "required_terms": [
+      "12",
+      "downlink",
+      "throughput"
+    ],
+    "expected_source_ids": [
+      "ericsson_ai_network_performance"
+    ]
+  },
+  {
+    "id": "q16",
+    "category": "applied_diagnostics",
+    "difficulty": "hard",
+    "question": "What causes of poor uplink performance are discussed in the Ericsson Mobility Report June 2025?",
+    "reference_answer": "The report notes that poor uplink performance can be associated with excessive distance between radio base stations and obstacles such as exterior building walls and terrain.",
+    "required_terms": [
+      "distance",
+      "obstacles",
+      "walls",
+      "terrain"
+    ],
+    "expected_source_ids": [
+      "ericsson_mobility_report_june_2025"
+    ]
+  },
+  {
+    "id": "q17",
+    "category": "corpus_specific",
+    "difficulty": "hard",
+    "question": "Which two UAV yaw orientations are represented in the Ericsson/AERPAW experiment data?",
+    "reference_answer": "The experiment data includes UAV yaw orientations of 45 degrees and 315 degrees.",
+    "required_terms": [
+      "45",
+      "315"
+    ],
+    "expected_source_ids": [
+      "aerpaw_ericsson_dataset"
+    ]
+  },
+  {
+    "id": "q18",
+    "category": "cross_source",
+    "difficulty": "hard",
+    "question": "Which two specifications in this corpus should be consulted for NR physical-layer measurements and LTE physical-layer measurements respectively?",
+    "reference_answer": "Use 3GPP TS 38.215 for NR physical-layer measurements and TS 36.214 for LTE physical-layer measurements.",
+    "required_terms": [
+      "38.215",
+      "36.214",
+      "nr",
+      "lte"
+    ],
+    "expected_source_ids": [
+      "etsi_ts_138215_v18_5_0",
+      "etsi_ts_136214_v18_0_0"
+    ]
+  },
+  {
+    "id": "q19",
+    "category": "cross_source",
+    "difficulty": "hard",
+    "question": "Which standards in the corpus are most relevant when interpreting NR radio measurements together with CQI/MCS-related data procedures?",
+    "reference_answer": "TS 38.215 is relevant for NR physical-layer measurements, while TS 38.214 covers physical-layer procedures for data including CQI/MCS-related procedures.",
+    "required_terms": [
+      "38.215",
+      "38.214"
+    ],
+    "expected_source_ids": [
+      "etsi_ts_138215_v18_5_0",
+      "etsi_ts_138214_v18_10_0"
+    ]
+  },
+  {
+    "id": "q20",
+    "category": "applied_diagnostics",
+    "difficulty": "hard",
+    "question": "If an NR observation has reasonable SSB RSRP but unexpectedly poor throughput, what retrieved Ericsson concept cautions against assuming the signal-strength measurement should directly predict bitrate?",
+    "reference_answer": "Ericsson's Massive MIMO discussion explains that NR SSB RSRP/SINR is not directly correlated with data-transmission performance because PDSCH uses separate traffic beams.",
+    "required_terms": [
+      "ssb",
+      "traffic beams",
+      "data"
+    ],
+    "expected_source_ids": [
+      "ericsson_massive_mimo_beamforming"
+    ]
   }
 ]
