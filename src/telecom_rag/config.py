@@ -12,14 +12,30 @@ DOCS_DIR = PROJECT_ROOT / "docs" / "corpus"
 VECTOR_STORE_DIR = PROJECT_ROOT / "vector_store"
 EVAL_PATH = PROJECT_ROOT / "eval" / "questions.json"
 
-EMBEDDING_MODEL = os.getenv(
-    "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+# Retrieval stack. BGE is retrieval-specific while remaining small enough for CPU demos.
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
+RERANKER_MODEL = os.getenv(
+    "RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L6-v2"
 )
+BGE_QUERY_PREFIX = os.getenv(
+    "BGE_QUERY_PREFIX",
+    "Represent this sentence for searching relevant passages: ",
+)
+
+# ~400-token chunks are a better fit for the 512-token embedding window than the
+# previous 1200-character baseline, while still giving technical definitions context.
+CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "1700"))
+CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "250"))
+CHUNKING_VERSION = "section-aware-v2"
+
+TOP_K = int(os.getenv("RAG_TOP_K", "4"))
+DENSE_CANDIDATES = int(os.getenv("RAG_DENSE_CANDIDATES", "15"))
+BM25_CANDIDATES = int(os.getenv("RAG_BM25_CANDIDATES", "15"))
+RERANK_CANDIDATES = int(os.getenv("RAG_RERANK_CANDIDATES", "20"))
+RRF_K = int(os.getenv("RAG_RRF_K", "60"))
+
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
-CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "1200"))
-CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "200"))
-TOP_K = int(os.getenv("RAG_TOP_K", "4"))
 
 # Public-demo safety defaults. Environment variables can tighten these further.
 MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "650"))
