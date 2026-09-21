@@ -127,12 +127,18 @@ Run:
 python scripts/download_docs.py
 ```
 
-The starter RAG corpus currently contains **4 configured sources**:
+The RAG corpus now contains **10 configured sources** covering:
 
-1. ETSI / 3GPP TS 38.215 — NR physical-layer measurements
-2. ETSI / 3GPP TS 38.214 — NR physical-layer procedures for data
-3. AERPAW Ericsson 5G NSA dataset description
-4. AERPAW Ericsson experiment post-processing documentation
+1. NR physical-layer measurements (TS 38.215)
+2. NR data procedures (TS 38.214)
+3. NR / NG-RAN architecture (TS 38.300)
+4. LTE physical-layer measurements (TS 36.214)
+5. the exact AERPAW/Ericsson dataset
+6. its post-processing workflow
+7. Ericsson Massive MIMO / beamforming material
+8. Ericsson coverage/capacity and traffic analysis
+9. Ericsson network-performance optimization material
+10. Ericsson Mobility Report June 2025
 
 They are downloaded into:
 
@@ -198,22 +204,24 @@ The notebook demonstrates:
 
 1. document loading,
 2. text extraction,
-3. chunking,
-4. SentenceTransformer embeddings,
-5. FAISS indexing,
-6. semantic retrieval,
-7. LangGraph routing,
-8. documentation-only RAG,
-9. KPI-aware RAG,
-10. retrieval Hit@k evaluation,
-11. **same LLM without RAG vs with RAG** evaluation.
+3. section-aware contextual chunking,
+4. BGE retrieval embeddings,
+5. FAISS dense retrieval,
+6. BM25 lexical retrieval,
+7. reciprocal-rank fusion,
+8. cross-encoder reranking,
+9. dense vs hybrid vs reranked retrieval ablation,
+10. LangGraph routing,
+11. documentation-only and KPI-aware RAG,
+12. a 20-question source-aware evaluation,
+13. **same LLM without RAG vs final reranked RAG** evaluation.
 
-The default evaluation runs only the first 5 questions to keep local inference reasonably fast.
+The default generation evaluation runs the first 10 questions to keep local inference reasonably fast.
 
 Change:
 
 ```python
-limit=5
+limit=10
 ```
 
 to:
@@ -222,7 +230,7 @@ to:
 limit=None
 ```
 
-to run the complete evaluation set.
+to run all 20 evaluation questions.
 
 ---
 
@@ -236,7 +244,7 @@ Run:
 python scripts/build_index.py
 ```
 
-The generated index is stored in:
+The generated BGE/FAISS index, its chunk snapshot, and a retrieval-configuration manifest are stored in:
 
 ```text
 vector_store/
@@ -277,7 +285,9 @@ The app lets you:
 - compare against the same LLM without RAG,
 - inspect the LangGraph route,
 - inspect the data-derived KPI context,
-- inspect retrieved chunks and source citations.
+- switch between dense, hybrid, and reranked retrieval,
+- inspect the clean retrieval query,
+- inspect retrieved chunks, retrieval method/reranker metadata, and source citations.
 
 ---
 
@@ -360,3 +370,16 @@ For the Streamlit Community Cloud deployment, including API billing protection, 
 ```text
 DEPLOYMENT.md
 ```
+
+
+## After upgrading from the original RAG baseline
+
+If you ran the older MiniLM/four-source version, simply rerun:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python scripts/download_docs.py
+python scripts/build_index.py
+```
+
+The index manifest prevents the application from silently reusing the old MiniLM vectors. Streamlit/bootstrap also refreshes a legacy four-document corpus and rebuilds stale indexes automatically.
