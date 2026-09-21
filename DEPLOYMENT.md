@@ -6,7 +6,8 @@ The repository is prepared so a fresh Streamlit container can bootstrap the demo
 2. download the public RAG corpus,
 3. build BGE embeddings and the FAISS index,
 4. initialize BM25 lexical retrieval and a cross-encoder reranker,
-5. use a hosted OpenAI model for generation,
+5. use a hosted OpenAI model for generation.
+
 If the KPI download is temporarily unavailable, the deployed app falls back to **documentation-only RAG** instead of crashing.
 
 ## What you need to do yourself
