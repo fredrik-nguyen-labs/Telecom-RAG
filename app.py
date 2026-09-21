@@ -23,7 +23,7 @@ from telecom_rag.config import (
 )
 from telecom_rag.data import load_processed_kpis
 from telecom_rag.graph import build_graph
-from telecom_rag.rag import get_llm, load_vector_store
+from telecom_rag.rag import get_llm, load_advanced_retriever
 
 
 st.set_page_config(
@@ -55,9 +55,9 @@ def cached_bootstrap():
     return ensure_demo_assets()
 
 
-@st.cache_resource(show_spinner="Loading embeddings and FAISS index...")
-def cached_store():
-    return load_vector_store(build_if_missing=False)
+@st.cache_resource(show_spinner="Loading BGE, BM25 and FAISS retrieval...")
+def cached_retriever():
+    return load_advanced_retriever(build_if_missing=False)
 
 
 @st.cache_resource(show_spinner=False)
@@ -117,6 +117,15 @@ with st.sidebar:
             st.warning("OPENAI_API_KEY is not configured.")
 
     use_rag = st.toggle("Use RAG", value=True)
+    retrieval_mode = st.selectbox(
+        "Retrieval pipeline",
+        ["reranked", "hybrid", "dense"],
+        index=0,
+        help=(
+            "reranked = BGE dense + BM25 + reciprocal-rank fusion + cross-encoder; "
+            "hybrid = BGE + BM25 + fusion; dense = BGE/FAISS only."
+        ),
+    )
     compare = st.toggle(
         "Also run the LLM-only baseline",
         value=False,
@@ -154,11 +163,14 @@ with st.sidebar:
             """
             **Structured data:** real Ericsson/AERPAW 5G NSA KPI measurements.
 
-            **Starter RAG corpus:** 4 configured public sources:
-            - ETSI / 3GPP TS 38.215
-            - ETSI / 3GPP TS 38.214
-            - AERPAW Ericsson dataset description
-            - AERPAW Ericsson post-processing documentation
+            **RAG corpus:** 10 configured public sources spanning:
+            - NR/LTE measurement standards,
+            - NR data procedures and architecture,
+            - the exact AERPAW Ericsson experiment,
+            - Ericsson material on beamforming, coverage/capacity and network performance.
+
+            **Retrieval:** BGE dense search + BM25 lexical search + reciprocal-rank fusion
+            + cross-encoder reranking.
 
             The app distinguishes measured KPI evidence from retrieved technical knowledge.
             """
@@ -263,9 +275,15 @@ if run:
     st.session_state.request_units_used += units_needed
 
     try:
-        store = cached_store()
+        retriever = cached_retriever()
         llm = cached_llm(provider, model)
-        graph = build_graph(llm, store, reference_df=kpis, top_k=top_k)
+        graph = build_graph(
+            llm,
+            retriever,
+            reference_df=kpis,
+            top_k=top_k,
+            retrieval_mode=retrieval_mode,
+        )
 
         with st.spinner("Running the LangGraph workflow..."):
             result = graph.invoke(
@@ -279,11 +297,16 @@ if run:
         st.subheader("Answer")
         st.markdown(result["answer"])
 
-        meta_cols = st.columns(4)
+        meta_cols = st.columns(5)
         meta_cols[0].metric("Route", result.get("route", "-"))
         meta_cols[1].metric("RAG", "On" if use_rag else "Off")
-        meta_cols[2].metric("Retrieved chunks", len(result.get("sources", [])))
-        meta_cols[3].metric("Latency", f"{result.get('latency_s', 0):.2f} s")
+        meta_cols[2].metric("Retrieval", result.get("retrieval_mode", retrieval_mode))
+        meta_cols[3].metric("Chunks", len(result.get("sources", [])))
+        meta_cols[4].metric("Latency", f"{result.get('latency_s', 0):.2f} s")
+
+        if result.get("retrieval_query"):
+            with st.expander("Retrieval query"):
+                st.code(result["retrieval_query"])
 
         if result.get("kpi_context"):
             with st.expander("Data-derived KPI context sent to the LLM"):
@@ -293,11 +316,25 @@ if run:
             st.subheader("Retrieved sources")
             for source in result["sources"]:
                 page = f" — page {source['page']}" if source.get("page") else ""
-                with st.expander(f"[{source['citation']}] {source['source']}{page}"):
+                section = f" — {source['section']}" if source.get("section") else ""
+                with st.expander(
+                    f"[{source['citation']}] {source['source']}{page}{section}"
+                ):
+                    if source.get("retrieval_methods"):
+                        st.caption(
+                            f"Retrieved by: {source['retrieval_methods']} · "
+                            f"rerank score: {source.get('rerank_score')}"
+                        )
                     st.write(source["excerpt"])
 
         if compare and use_rag:
-            baseline_graph = build_graph(llm, store, reference_df=kpis, top_k=top_k)
+            baseline_graph = build_graph(
+                llm,
+                retriever,
+                reference_df=kpis,
+                top_k=top_k,
+                retrieval_mode=retrieval_mode,
+            )
             with st.spinner("Running the same LLM without retrieval..."):
                 baseline = baseline_graph.invoke(
                     {
