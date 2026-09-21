@@ -20,3 +20,9 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "1200"))
 CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "200"))
 TOP_K = int(os.getenv("RAG_TOP_K", "4"))
+
+# Public-demo safety defaults. Environment variables can tighten these further.
+MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "650"))
+MAX_QUESTION_CHARS = int(os.getenv("MAX_QUESTION_CHARS", "700"))
+MAX_REQUEST_UNITS_PER_SESSION = int(os.getenv("MAX_REQUEST_UNITS_PER_SESSION", "12"))
+MAX_TOP_K_PUBLIC = int(os.getenv("MAX_TOP_K_PUBLIC", "5"))
