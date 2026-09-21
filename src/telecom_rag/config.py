@@ -42,3 +42,11 @@ MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "650"))
 MAX_QUESTION_CHARS = int(os.getenv("MAX_QUESTION_CHARS", "700"))
 MAX_REQUEST_UNITS_PER_SESSION = int(os.getenv("MAX_REQUEST_UNITS_PER_SESSION", "12"))
 MAX_TOP_K_PUBLIC = int(os.getenv("MAX_TOP_K_PUBLIC", "5"))
+
+
+# Optional hosted persistence/vector backend.
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+USE_SUPABASE = os.getenv("USE_SUPABASE", "").lower() in {"1", "true", "yes", "on"}
+SUPABASE_SYNC_BATCH_SIZE = int(os.getenv("SUPABASE_SYNC_BATCH_SIZE", "50"))
