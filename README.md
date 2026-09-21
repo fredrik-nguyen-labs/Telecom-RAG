@@ -8,14 +8,15 @@ The project combines:
 - reproducible pandas/scikit-learn analysis,
 - public telecom standards/documentation,
 - BGE retrieval embeddings,
-- FAISS dense search + BM25 lexical search,
+- FAISS/BM25 local retrieval for notebooks,
+- Supabase Postgres + pgvector for hosted persistence/retrieval,
 - reciprocal-rank fusion + cross-encoder reranking,
 - LangChain components,
 - LangGraph orchestration,
 - the same LLM **with vs without RAG** evaluation,
 - a Streamlit demo.
 
-For local setup and the exact run order, see **[RUNNING.md](RUNNING.md)**. For the public Streamlit deployment, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+For local setup and the exact run order, see **[RUNNING.md](RUNNING.md)**. For Supabase setup, see **[SUPABASE.md](SUPABASE.md)**. For the public Streamlit deployment, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
 The central idea is deliberately simple:
 
@@ -224,7 +225,18 @@ OPENAI_API_KEY = "..."
 OPENAI_MODEL = "gpt-5.6-luna"
 ```
 
-A template is included at `.streamlit/secrets.toml.example`.
+For the recommended persistent deployment, also configure Supabase:
+
+```toml
+USE_SUPABASE = "true"
+SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "sb_publishable_..."
+```
+
+Seed the database once from a trusted environment with `python scripts/sync_supabase.py`.
+The secret key is **not** needed by the public app.
+
+A complete guide is in [`SUPABASE.md`](SUPABASE.md), and the secrets template is at `.streamlit/secrets.toml.example`.
 
 ## 7. Why LangGraph here?
 
@@ -277,6 +289,7 @@ Telecom-RAG/
 ├── app.py
 ├── requirements.txt
 ├── requirements-dev.txt
+├── SUPABASE.md
 ├── data/
 │   ├── README.md
 │   ├── raw/                 # downloaded, ignored by Git
@@ -293,7 +306,11 @@ Telecom-RAG/
 │   ├── download_data.py
 │   ├── download_docs.py
 │   ├── prepare_kpi_data.py
-│   └── build_index.py
+│   ├── build_index.py
+│   └── sync_supabase.py
+├── supabase/
+│   └── migrations/
+│       └── 20260921130000_init_telecom_rag.sql
 └── src/telecom_rag/
     ├── config.py
     ├── data.py
@@ -301,31 +318,44 @@ Telecom-RAG/
     ├── documents.py
     ├── rag.py
     ├── retrieval.py
+    ├── supabase_backend.py
     ├── graph.py
     └── evaluation.py
 ```
 
 ## 10. Retrieval architecture
 
-The default retrieval path is now:
+The project has two interchangeable retrieval backends.
+
+Local/notebook:
 
 ```text
-question
-  ↓
-clean retrieval query
-  ↓
-BGE/FAISS top-15      BM25 top-15
-       \                /
-        reciprocal-rank fusion
-                 ↓
-          ~20 candidates
-                 ↓
-      cross-encoder reranking
-                 ↓
-             top-4
-                 ↓
-               LLM
+BGE/FAISS + BM25
+       ↓
+      RRF
+       ↓
+cross-encoder
+       ↓
+      LLM
 ```
+
+Hosted/deployed:
+
+```text
+BGE query embedding
+       ↓
+Supabase Postgres
+├── pgvector/HNSW
+└── full-text search
+       ↓
+      RRF
+       ↓
+cross-encoder
+       ↓
+      LLM
+```
+
+The LangGraph workflow and generation code are shared between both backends.
 
 The Streamlit UI also exposes `dense`, `hybrid`, and `reranked` modes so the retrieval ablation can be demonstrated without changing code.
 
