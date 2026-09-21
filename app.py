@@ -15,10 +15,19 @@ from telecom_rag.data import load_processed_kpis
 from telecom_rag.graph import build_graph
 from telecom_rag.rag import get_llm, load_vector_store
 
-if "OPENAI_API_KEY" in st.secrets and not os.getenv("OPENAI_API_KEY"):
-    os.environ["OPENAI_API_KEY"] = str(st.secrets["OPENAI_API_KEY"])
-if "OPENAI_MODEL" in st.secrets and not os.getenv("OPENAI_MODEL"):
-    os.environ["OPENAI_MODEL"] = str(st.secrets["OPENAI_MODEL"])
+# Streamlit Community Cloud stores secrets in st.secrets rather than a checked-in file.
+# Local development may have no secrets.toml at all, so access defensively.
+try:
+    openai_key = st.secrets.get("OPENAI_API_KEY")
+    openai_model = st.secrets.get("OPENAI_MODEL")
+except Exception:
+    openai_key = None
+    openai_model = None
+
+if openai_key and not os.getenv("OPENAI_API_KEY"):
+    os.environ["OPENAI_API_KEY"] = str(openai_key)
+if openai_model and not os.getenv("OPENAI_MODEL"):
+    os.environ["OPENAI_MODEL"] = str(openai_model)
 
 st.set_page_config(page_title="Telecom RAG", page_icon="📡", layout="wide")
 
