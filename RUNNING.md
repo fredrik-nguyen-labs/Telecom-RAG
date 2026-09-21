@@ -349,3 +349,14 @@ Streamlit app
 ```
 
 The notebooks explain the reasoning behind the implementation; the scripts and Streamlit app are the reusable application version.
+
+
+---
+
+## Public deployment
+
+For the Streamlit Community Cloud deployment, including API billing protection, secrets, self-bootstrap behavior, and how to make the app public while keeping the GitHub repository private, see:
+
+```text
+DEPLOYMENT.md
+```
