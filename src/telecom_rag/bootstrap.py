@@ -8,7 +8,7 @@ from pathlib import Path
 from .config import DOCS_DIR, PROCESSED_KPI_PATH, PROJECT_ROOT, VECTOR_STORE_DIR
 from .data import build_kpi_table, save_kpi_table
 from .kpi import add_anomaly_scores
-from .rag import build_vector_store
+from .rag import build_vector_store, index_is_current
 
 
 @dataclass
@@ -61,7 +61,7 @@ def ensure_docs() -> tuple[bool, str]:
         p for p in DOCS_DIR.glob("*")
         if p.is_file() and p.suffix.lower() in {".pdf", ".txt", ".md"} and not p.name.startswith("_")
     ] if DOCS_DIR.exists() else []
-    if len(readable) >= 2:
+    if len(readable) >= 4:
         return True, f"Using {len(readable)} downloaded RAG source files."
 
     ok, log = _run_script(PROJECT_ROOT / "scripts" / "download_docs.py")
@@ -69,17 +69,19 @@ def ensure_docs() -> tuple[bool, str]:
         p for p in DOCS_DIR.glob("*")
         if p.is_file() and p.suffix.lower() in {".pdf", ".txt", ".md"} and not p.name.startswith("_")
     ] if DOCS_DIR.exists() else []
-    if ok and len(readable) >= 2:
+    if ok and len(readable) >= 4:
         return True, f"Downloaded {len(readable)} RAG source files."
     return False, "RAG document bootstrap failed. " + log
 
 
 def ensure_vector_index() -> tuple[bool, str]:
-    if (VECTOR_STORE_DIR / "index.faiss").exists() and (VECTOR_STORE_DIR / "index.pkl").exists():
-        return True, "Using existing FAISS index."
+    if index_is_current(VECTOR_STORE_DIR):
+        return True, "Using current FAISS/BGE index."
     try:
         store = build_vector_store()
-        return True, f"Built FAISS index with {store.index.ntotal:,} chunks."
+        return True, (
+            f"Built current FAISS/BGE index with {store.index.ntotal:,} contextual chunks."
+        )
     except Exception as exc:
         return False, f"FAISS bootstrap failed: {exc}"
 
