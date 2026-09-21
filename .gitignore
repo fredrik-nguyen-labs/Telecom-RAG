@@ -1,11 +1,15 @@
-# Downloaded / generated data
+# Downloaded / generated KPI data
 data/downloads/
 data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
-# RAG indexes
+# Downloaded third-party RAG corpus
+docs/corpus/*
+!docs/corpus/.gitkeep
+
+# Generated vector indexes
 vector_store/
 *.faiss
 *.pkl
@@ -19,6 +23,9 @@ venv/
 # Secrets / local config
 .env
 .streamlit/secrets.toml
+
+# Jupyter
+.ipynb_checkpoints/
 
 # OS / editor
 .DS_Store
