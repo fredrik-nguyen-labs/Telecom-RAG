@@ -8,7 +8,7 @@ from langgraph.graph import END, START, StateGraph
 
 from .kpi import summarize_observation
 from .rag import answer_with_rag, answer_without_rag
-from .retrieval import AdvancedRetriever, build_retrieval_query
+from .retrieval import RetrieverProtocol, build_retrieval_query
 
 
 class AppState(TypedDict, total=False):
@@ -33,7 +33,7 @@ KPI_TERMS = {
 
 def build_graph(
     llm: BaseChatModel,
-    retriever: AdvancedRetriever,
+    retriever: RetrieverProtocol,
     reference_df: pd.DataFrame | None = None,
     top_k: int = 4,
     retrieval_mode: str = "reranked",
