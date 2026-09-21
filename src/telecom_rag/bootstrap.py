@@ -61,7 +61,9 @@ def ensure_docs() -> tuple[bool, str]:
         p for p in DOCS_DIR.glob("*")
         if p.is_file() and p.suffix.lower() in {".pdf", ".txt", ".md"} and not p.name.startswith("_")
     ] if DOCS_DIR.exists() else []
-    if len(readable) >= 4:
+    # The v2 corpus config has 10 sources. If only the old four-source corpus is
+    # present, refresh it automatically. We tolerate some external download failures.
+    if len(readable) >= 8:
         return True, f"Using {len(readable)} downloaded RAG source files."
 
     ok, log = _run_script(PROJECT_ROOT / "scripts" / "download_docs.py")
