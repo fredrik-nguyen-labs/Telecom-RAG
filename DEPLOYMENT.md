@@ -1,76 +1,69 @@
 # Deploy Telecom-RAG to Streamlit Community Cloud
 
-The repository is prepared so a fresh Streamlit container can bootstrap the demo automatically:
+The recommended hosted architecture is:
 
-1. download/process the Ericsson/AERPAW KPI data,
-2. download the public RAG corpus,
-3. build BGE embeddings and the FAISS index,
-4. initialize BM25 lexical retrieval and a cross-encoder reranker,
-5. use a hosted OpenAI model for generation.
+```text
+Streamlit
+   ↓
+BGE query embedding
+   ↓
+Supabase Postgres
+├── KPI observations
+├── pgvector/HNSW semantic search
+└── Postgres full-text search
+   ↓
+reciprocal-rank fusion
+   ↓
+cross-encoder reranker
+   ↓
+OpenAI
+```
 
-If the KPI download is temporarily unavailable, the deployed app falls back to **documentation-only RAG** instead of crashing.
-
-## What you need to do yourself
-
-You only need to configure the external accounts/secrets. Do **not** commit an API key to GitHub.
-
----
+The local FAISS/BM25 backend remains available as a fallback.
 
 ## 1. Create a separate OpenAI API project
 
-Use a dedicated API project for this public demo rather than your default/general project.
+Use a dedicated OpenAI API project for the public demo and create a project-scoped API key.
 
-Suggested project name:
+Configure a small enforced spend limit and conservative rate limits. The Streamlit app also caps question length, output length, top-k retrieval, and per-browser-session requests, but the OpenAI project spend limit is the important billing protection.
 
-```text
-Telecom-RAG-Demo
-```
+## 2. Create and seed Supabase
 
-In the OpenAI API platform:
+Create a Supabase project.
 
-1. create/select the project,
-2. enable only the model(s) you want the demo to use,
-3. configure a small project spend limit,
-4. make sure the spend control is configured as an **enforced/hard limit**, not only a notification threshold,
-5. optionally set conservative project/model rate limits,
-6. create a project-scoped API key.
+Then follow [`SUPABASE.md`](SUPABASE.md). The one-time setup is:
 
-A small public portfolio demo does not need a large budget. Pick a limit you are comfortable losing if the URL is abused.
+1. Open the Supabase SQL Editor.
+2. Run:
+   ```text
+   supabase/migrations/20260921130000_init_telecom_rag.sql
+   ```
+3. In a trusted local/admin environment set the project URL and Supabase secret key.
+4. Run:
+   ```bash
+   python scripts/sync_supabase.py
+   ```
+5. Keep the Supabase Project URL and publishable key for Streamlit.
 
-The app also has local guardrails:
-- max question length: 700 characters,
-- max retrieved chunks: 5,
-- max generated output: 650 tokens,
-- 12 request units per browser session,
-- LLM-only comparison costs an extra request unit.
+Do **not** add the Supabase secret/admin key to the public Streamlit deployment.
 
-These app limits are **not security boundaries** because a determined user can open a new session. The OpenAI project hard spend limit is the important billing protection.
-
----
-
-## 2. Connect Streamlit Community Cloud to GitHub
+## 3. Connect Streamlit Community Cloud to GitHub
 
 Go to:
 
 https://share.streamlit.io
 
-Sign in with GitHub.
-
-The repository is currently:
+Sign in with GitHub and authorize access to:
 
 ```text
 fredrik-nguyen-labs/Telecom-RAG
 ```
 
-Because the repository belongs to the `fredrik-nguyen-labs` organization and is private, authorize Streamlit Community Cloud to access that organization/repository when GitHub asks.
+Because the repository is organization-owned and private, make sure Streamlit has access to that organization/repository.
 
-Make sure you are in the Streamlit workspace corresponding to the GitHub repository owner.
+## 4. Create the app
 
----
-
-## 3. Create the Streamlit app
-
-Create a new app with:
+Use:
 
 ```text
 Repository:     fredrik-nguyen-labs/Telecom-RAG
@@ -79,32 +72,20 @@ Main file:      app.py
 Python version: 3.12
 ```
 
-Choose a custom subdomain if available, for example:
+Choose an available Streamlit subdomain.
 
-```text
-telecom-rag
-```
+## 5. Add Streamlit secrets
 
-which would produce a URL like:
-
-```text
-https://telecom-rag.streamlit.app
-```
-
-If that subdomain is already taken, choose another short descriptive name.
-
----
-
-## 4. Add Streamlit secrets
-
-Before deploying (or from App settings -> Secrets afterward), add:
+In **App settings -> Secrets**, configure:
 
 ```toml
-OPENAI_API_KEY = "YOUR_PROJECT_SCOPED_API_KEY"
+OPENAI_API_KEY = "..."
 OPENAI_MODEL = "gpt-5.6-luna"
-```
 
-Do not add quotes around the key anywhere else in the repository and do not commit a real `secrets.toml`.
+USE_SUPABASE = "true"
+SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "..."
+```
 
 The checked-in template is:
 
@@ -112,141 +93,98 @@ The checked-in template is:
 .streamlit/secrets.toml.example
 ```
 
-The application automatically detects an OpenAI secret and switches the public deployment to the hosted provider. Local development without the secret continues to default to Ollama.
+The public app needs only the low-privilege Supabase publishable key.
 
----
-
-## 5. Deploy
+## 6. Deploy
 
 Click **Deploy**.
 
-On a completely fresh container the app will prepare its reproducible assets automatically. The first startup is heavier because it may need to:
+When Supabase is configured and seeded, a new Streamlit container does **not** need to redownload the telecom corpus or rebuild the FAISS index. The persistent document chunks, embeddings, and KPI rows are read from Supabase.
 
-- download the public KPI archive,
-- process the separate timestamped KPI streams,
-- download up to 10 configured RAG sources,
-- download the BGE embedding model,
-- build the versioned FAISS index,
-- download the cross-encoder reranker on the first reranked query.
+The first retrieval request still loads the small local BGE query-embedding model and cross-encoder reranker.
 
-Generated data, downloaded documents and FAISS files live only in the running Streamlit environment and are rebuilt after a clean container restart when necessary.
+If Supabase is unavailable or not seeded, the app retains the reproducible local FAISS/BM25 fallback.
 
----
+## 7. Make the app public
 
-## 6. Make the app public
+After deployment, use the Streamlit sharing/privacy settings to make the app public if desired.
 
-Because the GitHub repository is private, the Streamlit app may initially be private.
+You can keep the GitHub repository private while sharing the deployed app.
 
-After deployment:
+## 8. Verify the deployment
 
-1. open the app,
-2. click **Share** or open **App settings**,
-3. go to the sharing/privacy setting,
-4. select the option that makes the app public.
-
-This lets you keep the source repository private while sharing the live portfolio demo.
-
----
-
-## 7. Verify the deployed app
-
-The sidebar should show:
+The sidebar should show something similar to:
 
 ```text
-Hosted model configured
-KPI table:   ✅   (or ⚠️ docs-only if Dryad was unavailable)
-RAG sources: ✅
-FAISS/BGE index: ✅
+Hosted LLM configured
+Storage: Supabase Postgres + pgvector
+Current document chunks: <non-zero>
+KPI observations: <non-zero>
+Vector index: ✅ HNSW
 ```
 
-Test these two cases:
-
-### Documentation question
+Test a documentation question:
 
 ```text
 What do RSRP and SINR measure in a 5G NR network?
 ```
 
-Expected behavior:
-- route: `docs-only`,
-- retrieval mode: `reranked`,
-- RAG answer,
-- source citations,
-- retrieved chunks and retrieval metadata shown below the answer.
-
-### KPI-aware question
-
-Select an observation and ask:
+Then select a KPI observation and test:
 
 ```text
 Why might this observation have this throughput, and which radio measurements are most relevant to investigate?
 ```
 
-Expected behavior:
-- route: `kpi+docs`,
-- dataset-relative KPI context,
-- retrieved technical documentation,
-- cited explanation.
+The default retrieval mode should be `reranked`.
 
-Then enable **Also run the LLM-only baseline** to demonstrate the controlled RAG comparison. This makes two LLM calls.
+## 9. Troubleshooting
 
----
+### OpenAI error
 
-## 8. If deployment fails
+Check that:
 
-Open **Manage app -> logs** in Streamlit.
-
-Common causes:
-
-### Dependency installation failure
-
-Check that Streamlit is deploying with Python **3.12** and that it is using the root:
-
-```text
-requirements.txt
-```
-
-### `OPENAI_API_KEY is not set`
-
-Add the key in Streamlit App settings -> Secrets and reboot the app.
-
-### Billing / quota error
-
-Check:
-- the API project has available billing/credits,
 - the API key belongs to the intended project,
-- the project has not reached its configured hard spend limit,
-- the selected model is enabled for that project.
+- the API project has available billing,
+- the project has not reached its enforced spend limit,
+- the configured model is enabled.
 
-### KPI data shows docs-only mode
+### Supabase configured but app uses local storage
 
-This is not fatal. It means the automatic Dryad bootstrap failed. The RAG chatbot remains usable. Check the **Bootstrap details** expander in the sidebar for the download/preprocessing error.
+Check that:
 
-### Corpus or FAISS bootstrap fails
+- the SQL migration ran successfully,
+- `python scripts/sync_supabase.py` completed,
+- `USE_SUPABASE` is true in Streamlit secrets,
+- the Supabase Project URL is correct,
+- the publishable key is correct.
 
-The app stops because RAG cannot work without its knowledge base. Inspect **Deployment bootstrap details** and Streamlit logs. All exact source URLs are listed in:
+When the app falls back, the sidebar exposes the Supabase status/error.
 
-```text
-docs/SOURCES.md
+### Local fallback bootstrap fails
+
+If Supabase is unavailable, the app may try the local corpus/FAISS path. Inspect the bootstrap details and Streamlit logs.
+
+## 10. Updating the deployed app
+
+Streamlit Community Cloud watches the connected `main` branch.
+
+Code changes pushed to `main` update the app automatically.
+
+If the **corpus, chunking, embedding model, or KPI table changes**, rerun:
+
+```bash
+python scripts/sync_supabase.py
 ```
 
----
-
-## 9. Updating the deployed app
-
-Streamlit Community Cloud watches the connected GitHub branch.
-
-After future code changes are pushed to `main`, the deployed app updates automatically. Dependency changes in `requirements.txt` trigger dependency reinstallation.
-
----
+so the persistent database matches the new version.
 
 ## Recommended CV links
 
-Once the app is public, your CV/project section can contain both:
+Once public:
 
 ```text
 Live demo: https://<your-subdomain>.streamlit.app
 GitHub:    https://github.com/fredrik-nguyen-labs/Telecom-RAG
 ```
 
-If you keep the GitHub repository private, use only the live demo URL on the CV until you decide to make the repository public.
+If the GitHub repository stays private, use the live demo link on the CV.
