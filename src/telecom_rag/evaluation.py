@@ -11,7 +11,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 
 from .config import EVAL_PATH
 from .rag import LocalSentenceTransformerEmbeddings, answer_with_rag, answer_without_rag
-from .retrieval import AdvancedRetriever
+from .retrieval import RetrieverProtocol
 
 
 def load_eval_questions(path: Path = EVAL_PATH) -> list[dict[str, Any]]:
@@ -103,7 +103,7 @@ def _retrieval_metrics(docs: list, expected: list[str]) -> dict[str, float]:
 
 
 def evaluate_retrieval(
-    retriever: AdvancedRetriever,
+    retriever: RetrieverProtocol,
     questions: list[dict[str, Any]],
     k: int = 4,
     modes: tuple[str, ...] = ("dense", "hybrid", "reranked"),
@@ -143,7 +143,7 @@ def summarize_retrieval(results: pd.DataFrame) -> pd.DataFrame:
 
 def compare_baseline_and_rag(
     llm: BaseChatModel,
-    retriever: AdvancedRetriever,
+    retriever: RetrieverProtocol,
     embeddings: LocalSentenceTransformerEmbeddings,
     questions: list[dict[str, Any]],
     k: int = 4,
