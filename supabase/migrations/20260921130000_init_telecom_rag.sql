@@ -102,12 +102,12 @@ as $$
         dc.section,
         dc.content,
         dc.metadata,
-        (1 - (dc.embedding <=> p_query_embedding))::double precision as similarity,
+        (1 - (dc.embedding OPERATOR(extensions.<=>) p_query_embedding))::double precision as similarity,
         'dense'::text as retrieval_methods
     from public.document_chunks dc
     where dc.embedding_model = p_embedding_model
       and dc.chunking_version = p_chunking_version
-    order by dc.embedding <=> p_query_embedding
+    order by dc.embedding OPERATOR(extensions.<=>) p_query_embedding
     limit greatest(p_match_count, 1);
 $$;
 
@@ -146,12 +146,12 @@ with params as (
 semantic as (
     select
         dc.chunk_id,
-        (1 - (dc.embedding <=> p_query_embedding))::double precision as similarity,
-        row_number() over (order by dc.embedding <=> p_query_embedding) as semantic_rank
+        (1 - (dc.embedding OPERATOR(extensions.<=>) p_query_embedding))::double precision as similarity,
+        row_number() over (order by dc.embedding OPERATOR(extensions.<=>) p_query_embedding) as semantic_rank
     from public.document_chunks dc
     where dc.embedding_model = p_embedding_model
       and dc.chunking_version = p_chunking_version
-    order by dc.embedding <=> p_query_embedding
+    order by dc.embedding OPERATOR(extensions.<=>) p_query_embedding
     limit greatest(p_match_count * 3, 30)
 ),
 keyword as (
