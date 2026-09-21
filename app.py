@@ -53,6 +53,7 @@ for secret_name in (
     "OPENAI_MODEL",
     "USE_SUPABASE",
     "SUPABASE_URL",
+    "SUPABASE_PUBLISHABLE_KEY",
     "SUPABASE_ANON_KEY",
 ):
     secret_value = _read_secret(secret_name)
