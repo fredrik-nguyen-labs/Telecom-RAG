@@ -15,7 +15,9 @@ The project combines:
 - the same LLM **with vs without RAG** evaluation,
 - a Streamlit demo.
 
-For local setup and the exact run order, see **[RUNNING.md](RUNNING.md)**. For the public Streamlit deployment, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.The central idea is deliberately simple:
+For local setup and the exact run order, see **[RUNNING.md](RUNNING.md)**. For the public Streamlit deployment, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+
+The central idea is deliberately simple:
 
 ```text
 KPI measurements                    Technical documents
