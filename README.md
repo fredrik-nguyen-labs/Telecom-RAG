@@ -14,7 +14,7 @@ The project combines:
 - the same LLM **with vs without RAG** evaluation,
 - a Streamlit demo.
 
-The central idea is deliberately simple:
+For the exact setup and run order, see **[RUNNING.md](RUNNING.md)**.\n\nThe central idea is deliberately simple:
 
 ```text
 KPI measurements                    Technical documents
