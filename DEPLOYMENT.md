@@ -4,9 +4,9 @@ The repository is prepared so a fresh Streamlit container can bootstrap the demo
 
 1. download/process the Ericsson/AERPAW KPI data,
 2. download the public RAG corpus,
-3. build the local SentenceTransformer embeddings and FAISS index,
-4. use a hosted OpenAI model for generation.
-
+3. build BGE embeddings and the FAISS index,
+4. initialize BM25 lexical retrieval and a cross-encoder reranker,
+5. use a hosted OpenAI model for generation,
 If the KPI download is temporarily unavailable, the deployed app falls back to **documentation-only RAG** instead of crashing.
 
 ## What you need to do yourself
@@ -123,9 +123,10 @@ On a completely fresh container the app will prepare its reproducible assets aut
 
 - download the public KPI archive,
 - process the separate timestamped KPI streams,
-- download the four configured RAG sources,
-- download the embedding model,
-- build FAISS.
+- download up to 10 configured RAG sources,
+- download the BGE embedding model,
+- build the versioned FAISS index,
+- download the cross-encoder reranker on the first reranked query.
 
 Generated data, downloaded documents and FAISS files live only in the running Streamlit environment and are rebuilt after a clean container restart when necessary.
 
@@ -154,7 +155,7 @@ The sidebar should show:
 Hosted model configured
 KPI table:   ✅   (or ⚠️ docs-only if Dryad was unavailable)
 RAG sources: ✅
-FAISS index: ✅
+FAISS/BGE index: ✅
 ```
 
 Test these two cases:
@@ -167,9 +168,10 @@ What do RSRP and SINR measure in a 5G NR network?
 
 Expected behavior:
 - route: `docs-only`,
+- retrieval mode: `reranked`,
 - RAG answer,
 - source citations,
-- retrieved chunks shown below the answer.
+- retrieved chunks and retrieval metadata shown below the answer.
 
 ### KPI-aware question
 
