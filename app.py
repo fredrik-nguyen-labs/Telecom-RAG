@@ -586,9 +586,15 @@ if run:
             )
 
         with workflow_status.container():
-            with st.spinner(
-                "Analyzing the KPI context and retrieving relevant telecom sources..."
+            with st.status(
+                "📡 Analyzing network context...",
+                expanded=True,
+                state="running",
             ):
+                st.write(
+                    "Routing the question, retrieving relevant telecom evidence, "
+                    "and generating a grounded answer."
+                )
                 result = graph.invoke(
                     {
                         "question": graph_question,
