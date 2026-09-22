@@ -41,7 +41,10 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
 CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID", "")
 CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN", "")
 CLOUDFLARE_MODEL = os.getenv(
-    "CLOUDFLARE_MODEL", "@cf/meta/llama-3.2-3b-instruct"
+    "CLOUDFLARE_MODEL", "@cf/google/gemma-4-26b-a4b-it"
+)
+CLOUDFLARE_ROUTER_MODEL = os.getenv(
+    "CLOUDFLARE_ROUTER_MODEL", "@cf/zai-org/glm-4.7-flash"
 )
 CLOUDFLARE_EMBEDDING_MODEL = os.getenv(
     "CLOUDFLARE_EMBEDDING_MODEL", "@cf/baai/bge-small-en-v1.5"
@@ -57,7 +60,7 @@ USE_CLOUDFLARE_RETRIEVAL = os.getenv(
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 
 # Public-demo safety defaults. Environment variables can tighten these further.
-MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "650"))
+MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "1400"))
 MAX_QUESTION_CHARS = int(os.getenv("MAX_QUESTION_CHARS", "700"))
 MAX_REQUEST_UNITS_PER_SESSION = int(os.getenv("MAX_REQUEST_UNITS_PER_SESSION", "12"))
 MAX_TOP_K_PUBLIC = int(os.getenv("MAX_TOP_K_PUBLIC", "5"))
