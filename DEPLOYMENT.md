@@ -59,7 +59,8 @@ In **App settings → Secrets**:
 ```toml
 CLOUDFLARE_ACCOUNT_ID = "..."
 CLOUDFLARE_API_TOKEN = "..."
-CLOUDFLARE_MODEL = "@cf/meta/llama-3.2-3b-instruct"
+CLOUDFLARE_GENERATOR_MODEL = "@cf/google/gemma-4-26b-a4b-it"
+CLOUDFLARE_ROUTER_MODEL = "@cf/zai-org/glm-4.7-flash"
 CLOUDFLARE_EMBEDDING_MODEL = "@cf/baai/bge-small-en-v1.5"
 CLOUDFLARE_RERANKER_MODEL = "@cf/baai/bge-reranker-base"
 USE_CLOUDFLARE_RETRIEVAL = "true"
