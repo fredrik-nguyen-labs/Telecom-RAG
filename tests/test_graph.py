@@ -11,15 +11,6 @@ class EmptyRetriever:
         return RetrievalResult(documents=[], query=query, mode=mode)
 
 
-class RecordingRetriever:
-    def __init__(self) -> None:
-        self.last_query = ""
-
-    def retrieve(self, query: str, k: int = 4, mode: str = "reranked") -> RetrievalResult:
-        self.last_query = query
-        return RetrievalResult(documents=[], query=query, mode=mode)
-
-
 def test_router_parser_accepts_expected_tokens() -> None:
     assert _parse_router_response("KPI") == (
         "kpi+docs",
