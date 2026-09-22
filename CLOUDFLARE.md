@@ -140,3 +140,8 @@ export CLOUDFLARE_GENERATOR_MODEL="@cf/openai/gpt-oss-120b"
 ```
 
 The rest of the retrieval/router architecture stays unchanged.
+
+
+## Thinking mode
+
+The hosted generator and semantic router are reasoning-capable models. Application calls disable model thinking with `chat_template_kwargs.enable_thinking=false` so the output budget is used for visible answers rather than hidden reasoning. Evaluation uses the same model factory and therefore the same setting.
