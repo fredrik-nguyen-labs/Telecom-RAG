@@ -338,14 +338,12 @@ def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
 if cloudflare_available:
     provider = "cloudflare"
     model = os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_GENERATOR_MODEL)
-    router_model = os.getenv("CLOUDFLARE_ROUTER_MODEL", CLOUDFLARE_ROUTER_MODEL)
 elif hosted_lightweight:
     st.error("Hosted inference is not configured.")
     st.stop()
 else:
     provider = "ollama"
     model = os.getenv("OLLAMA_MODEL", OLLAMA_MODEL)
-    router_model = model
 
 retrieval_mode = "reranked"
 top_k = TOP_K
