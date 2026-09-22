@@ -9,13 +9,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 
 from .kpi import analyze_observation
-from .rag import answer_with_rag, answer_without_rag, message_text
+from .rag import answer_with_rag, answer_without_rag
 from .retrieval import RetrieverProtocol, build_retrieval_query
 
 
 class AppState(TypedDict, total=False):
     question: str
-    conversation_context: str
     use_rag: bool
     observation: dict[str, Any] | None
     kpi_context: str
@@ -144,11 +143,10 @@ def build_graph(
                 "router_latency_s": 0.0,
             }
 
-        conversation = state.get("conversation_context", "").strip()
-        user_prompt = f"Question:\n{state['question']}\n\n"
-        if conversation:
-            user_prompt += f"Recent conversation:\n{conversation}\n\n"
-        user_prompt += f"Available context:\n{_observation_schema(observation)}"
+        user_prompt = (
+            f"Question:\n{state['question']}\n\n"
+            f"Available context:\n{_observation_schema(observation)}"
+        )
         started = time.perf_counter()
         try:
             response = routing_model.invoke(
@@ -158,7 +156,7 @@ def build_graph(
                 ]
             )
             router_latency_s = time.perf_counter() - started
-            parsed = _parse_router_response(message_text(response.content))
+            parsed = _parse_router_response(response.content)
             if parsed is None:
                 return {
                     "route": "docs-only",
@@ -192,14 +190,8 @@ def build_graph(
         }
 
     def retrieve_node(state: AppState) -> AppState:
-        retrieval_question = state["question"]
-        conversation = state.get("conversation_context", "").strip()
-        if conversation:
-            retrieval_question = (
-                f"{retrieval_question}\nFollow-up context:\n{conversation}"
-            )
         query = build_retrieval_query(
-            retrieval_question,
+            state["question"],
             observation=state.get("observation") if state.get("route") == "kpi+docs" else None,
         )
         if not state.get("use_rag", True):
@@ -227,7 +219,6 @@ def build_graph(
                 state.get("retrieved_docs", []),
                 state.get("kpi_context", ""),
                 use_kpi_context=state.get("route") == "kpi+docs",
-                conversation_context=state.get("conversation_context", ""),
             )
         else:
             result = answer_without_rag(
