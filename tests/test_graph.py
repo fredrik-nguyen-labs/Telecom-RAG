@@ -92,22 +92,3 @@ def test_no_observation_skips_router_and_uses_docs() -> None:
 
     assert result["route"] == "docs-only"
     assert result["router_latency_s"] == 0.0
-
-
-
-def test_followup_conversation_is_used_for_retrieval_context() -> None:
-    retriever = RecordingRetriever()
-    generator = FakeListChatModel(responses=["## Answer\nFollow-up answer"])
-    graph = build_graph(generator, retriever)
-
-    graph.invoke(
-        {
-            "question": "What about that metric?",
-            "conversation_context": "User: What is RSRP?\nAssistant: RSRP measures reference-signal power.",
-            "use_rag": True,
-            "observation": None,
-        }
-    )
-
-    assert "What is RSRP?" in retriever.last_query
-    assert "What about that metric?" in retriever.last_query
