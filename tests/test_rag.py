@@ -18,7 +18,7 @@ def test_message_text_extracts_visible_content_blocks() -> None:
     assert message_text(content) == "First line.\nSecond line."
 
 
-def test_cloudflare_llm_disables_thinking(monkeypatch) -> None:
+def test_cloudflare_llm_uses_precleanup_request_shape(monkeypatch) -> None:
     captured: dict = {}
 
     class FakeChatOpenAI:
@@ -38,18 +38,13 @@ def test_cloudflare_llm_disables_thinking(monkeypatch) -> None:
     )
 
     assert captured["max_tokens"] == 128
-    assert captured["extra_body"] == {
-        "chat_template_kwargs": {"enable_thinking": False}
-    }
+    assert "extra_body" not in captured
 
 
 
-def test_answer_with_rag_repairs_missing_inline_citations() -> None:
+def test_answer_with_rag_does_not_make_a_second_citation_repair_call() -> None:
     llm = FakeListChatModel(
-        responses=[
-            "## Answer\nRSRP measures received reference-signal power.",
-            "## Answer\nRSRP measures received reference-signal power [S1].",
-        ]
+        responses=["## Answer\nRSRP measures received reference-signal power."]
     )
     docs = [
         Document(
@@ -60,11 +55,11 @@ def test_answer_with_rag_repairs_missing_inline_citations() -> None:
 
     result = answer_with_rag(llm, "What does RSRP measure?", docs)
 
-    assert "[S1]" in result["answer"]
+    assert result["answer"].endswith("power.")
     assert result["sources"][0]["citation"] == "S1"
 
 
-def test_answer_with_rag_keeps_existing_valid_citation_without_repair() -> None:
+def test_answer_with_rag_keeps_existing_valid_citation() -> None:
     llm = FakeListChatModel(
         responses=["## Answer\nRSRP measures received reference-signal power [S1]."]
     )
