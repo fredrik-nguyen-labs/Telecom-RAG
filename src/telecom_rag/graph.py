@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from typing import Any, Literal, TypedDict
 
@@ -29,54 +30,58 @@ class AppState(TypedDict, total=False):
     total_latency_s: float
     llm_usage: dict[str, int]
     route: str
+    route_reason: str
 
 
-KPI_REFERENCE_PHRASES = (
-    "this observation",
-    "this measurement",
-    "this row",
-    "this sample",
-    "these values",
-    "these kpis",
-    "these measurements",
-    "selected observation",
-    "selected measurement",
-    "current observation",
-    "current measurement",
-    "this throughput",
-    "this rsrp",
-    "this sinr",
-    "this cqi",
-    "this mcs",
+DEFINITION_INTENT_RE = re.compile(
+    r"\\b(?:what\\s+does\\s+.+?\\s+stand\\s+for|"
+    r"what\\s+is\\s+(?:an?\\s+)?(?:rsrp|sinr|cqi|mcs|rsrq)|"
+    r"define\\s+(?:rsrp|sinr|cqi|mcs|rsrq)|"
+    r"(?:meaning|definition)\\s+of\\s+(?:rsrp|sinr|cqi|mcs|rsrq)|"
+    r"what\\s+does\\s+(?:rsrp|sinr|cqi|mcs|rsrq)\\s+mean)\\b",
+    flags=re.IGNORECASE,
 )
 
-KPI_DIAGNOSTIC_PHRASES = (
-    "diagnose this",
-    "diagnose the selected",
-    "investigate this",
-    "investigate the selected",
-    "what is unusual about this",
-    "what is wrong with this",
-    "why is this observation",
-    "why is this measurement",
-    "why might this observation",
-    "why might this measurement",
-    "what explains this observation",
-    "what explains this measurement",
+OBSERVATION_REFERENCE_RE = re.compile(
+    r"\\b(?:this|these|selected|current)\\s+"
+    r"(?:observation|measurement|row|sample|values?|kpis?|"
+    r"throughput|rsrp|sinr|cqi|mcs|rsrq)\\b",
+    flags=re.IGNORECASE,
 )
+
+DIAGNOSTIC_REFERENCE_RE = re.compile(
+    r"\\b(?:diagnose|investigate|analy[sz]e|explain)\\s+"
+    r"(?:this|these|the\\s+selected|the\\s+current)\\b",
+    flags=re.IGNORECASE,
+)
+
+
+def classify_question_route(question: str, has_observation: bool) -> tuple[str, str]:
+    """Return the deterministic route and a human-readable reason.
+
+    Technical definitions never inherit the selected KPI row. KPI analysis requires
+    explicit reference to the selected/current measurement or a diagnostic instruction
+    aimed at it.
+    """
+    q = " ".join(question.strip().split())
+    if not has_observation:
+        return "docs-only", "no selected observation is available"
+
+    if DEFINITION_INTENT_RE.search(q):
+        return "docs-only", "definition/abbreviation question"
+
+    if OBSERVATION_REFERENCE_RE.search(q):
+        return "kpi+docs", "question explicitly references the selected measurement"
+
+    if DIAGNOSTIC_REFERENCE_RE.search(q):
+        return "kpi+docs", "question explicitly asks to diagnose the selected measurement"
+
+    return "docs-only", "no explicit reference to the selected measurement"
 
 
 def question_needs_kpi(question: str, has_observation: bool) -> bool:
-    """Route to KPI analysis only when the user explicitly refers to selected data.
-
-    Merely mentioning RSRP/SINR/throughput is a technical-doc question. This prevents a
-    selected UI row from contaminating generic questions such as "What does RSRP mean?".
-    """
-    if not has_observation:
-        return False
-
-    q = " ".join(question.lower().split())
-    return any(phrase in q for phrase in KPI_REFERENCE_PHRASES + KPI_DIAGNOSTIC_PHRASES)
+    route, _ = classify_question_route(question, has_observation)
+    return route == "kpi+docs"
 
 
 def build_graph(
@@ -94,11 +99,11 @@ def build_graph(
     """
 
     def route_node(state: AppState) -> AppState:
-        needs_kpi = question_needs_kpi(
+        route, reason = classify_question_route(
             state["question"],
             has_observation=bool(state.get("observation")),
         )
-        return {"route": "kpi+docs" if needs_kpi else "docs-only"}
+        return {"route": route, "route_reason": reason}
 
     def route_edge(state: AppState) -> Literal["analyze_kpi", "retrieve"]:
         return "analyze_kpi" if state.get("route") == "kpi+docs" else "retrieve"
@@ -148,6 +153,14 @@ def build_graph(
 
         generation_latency_s = float(result.get("latency_s", 0.0))
         retrieval_latency_s = float(state.get("retrieval_latency_s", 0.0))
+        if state.get("route") != "kpi+docs":
+            # Hard safety/UX guard: docs-only answers must never surface KPI hypotheses,
+            # even if a small model ignores the formatting instruction.
+            sections = dict(result.get("answer_sections") or {})
+            sections.pop("measured_evidence", None)
+            sections.pop("hypotheses", None)
+            result["answer_sections"] = sections
+
         result["generation_latency_s"] = generation_latency_s
         result["retrieval_latency_s"] = retrieval_latency_s
         result["total_latency_s"] = retrieval_latency_s + generation_latency_s
