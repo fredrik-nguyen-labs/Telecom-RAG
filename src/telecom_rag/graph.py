@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-import re
+import json
 import time
 from typing import Any, Literal, TypedDict
 
 import pandas as pd
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 
 from .kpi import analyze_observation
-from .rag import answer_with_rag, answer_without_rag
+from .rag import answer_with_rag, answer_without_rag, extract_token_usage
 from .retrieval import RetrieverProtocol, build_retrieval_query
 
 
@@ -32,47 +33,61 @@ class AppState(TypedDict, total=False):
     llm_usage: dict[str, int]
     route: str
     route_reason: str
+    router_latency_s: float
+    router_usage: dict[str, int]
 
 
-DEFINITION_INTENT_RE = re.compile(
-    r"\b(?:what\s+does\s+.+?\s+stand\s+for|"
-    r"what\s+is\s+(?:an?\s+)?(?:rsrp|sinr|cqi|mcs|rsrq)|"
-    r"define\s+(?:rsrp|sinr|cqi|mcs|rsrq)|"
-    r"(?:meaning|definition)\s+of\s+(?:rsrp|sinr|cqi|mcs|rsrq)|"
-    r"what\s+does\s+(?:rsrp|sinr|cqi|mcs|rsrq)\s+mean)\b",
-    flags=re.IGNORECASE,
-)
+ROUTER_SYSTEM_PROMPT = """You are an intent router for a telecom RAG application.
 
-OBSERVATION_REFERENCE_RE = re.compile(
-    r"\b(?:this|these|selected|current|my|our)\s+"
-    r"(?:observation|measurement|row|sample|values?|kpis?|"
-    r"throughput|rsrp|sinr|cqi|mcs|rsrq)\b",
-    flags=re.IGNORECASE,
-)
+Choose exactly one route:
 
-DIAGNOSTIC_REFERENCE_RE = re.compile(
-    r"\b(?:diagnose|investigate|analy[sz]e|explain)\s+"
-    r"(?:this|these|my|our|the\s+selected|the\s+current)\b",
-    flags=re.IGNORECASE,
-)
+- docs-only: the question can be answered from telecom knowledge/technical documents
+  without analyzing the currently available KPI observation or the reference KPI dataset.
+- kpi+docs: answering the question requires or materially benefits from analyzing the
+  available KPI values or statistics from the reference dataset. This includes diagnosis,
+  comparison, anomaly/outlier analysis, correlations/relationships/patterns in the data,
+  expected-vs-actual behavior, or indirect references such as "the values given".
 
-KPI_DIAGNOSTIC_INTENT_RE = re.compile(
-    r"\b(?:why\s+(?:is|are|might|could)|what\s+(?:stands\s+out|is\s+unusual)|"
-    r"diagnose|troubleshoot|investigate)\b.*"
-    r"\b(?:throughput|rsrp|rsrq|sinr|cqi|mcs|kpis?|values?|performance)\b",
-    flags=re.IGNORECASE,
-)
+A selected observation being available is NOT enough by itself to choose kpi+docs.
+Generic conceptual questions should remain docs-only even when they mention KPI names.
 
-KPI_RELATIONSHIP_INTENT_RE = re.compile(
-    r"(?:"
-    r"\b(?:correlations?|correlat(?:e|ed|ion)|relationships?|associations?|patterns?|trends?)\b"
-    r".*\b(?:values?|kpis?|measurements?|observations?|data|rsrp|rsrq|sinr|cqi|mcs|throughput)\b"
-    r"|"
-    r"\b(?:values?|kpis?|measurements?|observations?|data|rsrp|rsrq|sinr|cqi|mcs|throughput)\b"
-    r".*\b(?:correlations?|correlat(?:e|ed|ion)|relationships?|associations?|patterns?|trends?)\b"
-    r")",
-    flags=re.IGNORECASE,
-)
+Return one compact JSON object and nothing else:
+{"route":"docs-only"|"kpi+docs","reason":"short explanation"}
+"""
+
+
+def _observation_schema(observation: dict[str, Any] | None) -> str:
+    if not observation:
+        return "No KPI observation is available."
+    fields = [
+        str(key)
+        for key, value in observation.items()
+        if value is not None
+        and key not in {"observation_id", "observation_source", "timestamp"}
+    ]
+    source = observation.get("observation_source", "dataset")
+    return (
+        f"A KPI observation is available (source={source}). "
+        f"Available fields: {', '.join(fields) if fields else 'none'}."
+    )
+
+
+def _parse_router_response(content: Any) -> tuple[str, str] | None:
+    text = str(content).strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:].strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+    route = str(payload.get("route", "")).strip().lower()
+    reason = str(payload.get("reason", "")).strip()
+    if route not in {"docs-only", "kpi+docs"}:
+        return None
+    return route, reason or "semantic intent classification"
 
 
 def _docs_only_answer(sections: dict[str, str]) -> tuple[str, dict[str, str]]:
@@ -94,40 +109,6 @@ def _docs_only_answer(sections: dict[str, str]) -> tuple[str, dict[str, str]]:
     return "\n\n".join(parts).strip(), filtered
 
 
-def classify_question_route(question: str, has_observation: bool) -> tuple[str, str]:
-    """Return the deterministic route and a human-readable reason.
-
-    Technical definitions never inherit the selected KPI row. KPI analysis requires
-    explicit reference to the selected/current measurement or a diagnostic instruction
-    aimed at it.
-    """
-    q = " ".join(question.strip().split())
-    if not has_observation:
-        return "docs-only", "no selected observation is available"
-
-    if DEFINITION_INTENT_RE.search(q):
-        return "docs-only", "definition/abbreviation question"
-
-    if OBSERVATION_REFERENCE_RE.search(q):
-        return "kpi+docs", "question explicitly references the selected measurement"
-
-    if DIAGNOSTIC_REFERENCE_RE.search(q):
-        return "kpi+docs", "question explicitly asks to diagnose the selected measurement"
-
-    if KPI_DIAGNOSTIC_INTENT_RE.search(q):
-        return "kpi+docs", "diagnostic KPI question with observation values available"
-
-    if KPI_RELATIONSHIP_INTENT_RE.search(q):
-        return "kpi+docs", "question asks for data relationships/correlations"
-
-    return "docs-only", "no diagnostic reference to the available observation"
-
-
-def question_needs_kpi(question: str, has_observation: bool) -> bool:
-    route, _ = classify_question_route(question, has_observation)
-    return route == "kpi+docs"
-
-
 def build_graph(
     llm: BaseChatModel,
     retriever: RetrieverProtocol,
@@ -143,11 +124,50 @@ def build_graph(
     """
 
     def route_node(state: AppState) -> AppState:
-        route, reason = classify_question_route(
-            state["question"],
-            has_observation=bool(state.get("observation")),
+        observation = state.get("observation")
+        if not observation:
+            return {
+                "route": "docs-only",
+                "route_reason": "no KPI observation is available",
+                "router_latency_s": 0.0,
+                "router_usage": {},
+            }
+
+        user_prompt = (
+            f"Question:\n{state['question']}\n\n"
+            f"Available context:\n{_observation_schema(observation)}"
         )
-        return {"route": route, "route_reason": reason}
+        started = time.perf_counter()
+        try:
+            response = llm.invoke(
+                [
+                    SystemMessage(content=ROUTER_SYSTEM_PROMPT),
+                    HumanMessage(content=user_prompt),
+                ]
+            )
+            router_latency_s = time.perf_counter() - started
+            parsed = _parse_router_response(response.content)
+            if parsed is None:
+                return {
+                    "route": "docs-only",
+                    "route_reason": "semantic router returned an invalid response",
+                    "router_latency_s": router_latency_s,
+                    "router_usage": extract_token_usage(response),
+                }
+            route, reason = parsed
+            return {
+                "route": route,
+                "route_reason": reason,
+                "router_latency_s": router_latency_s,
+                "router_usage": extract_token_usage(response),
+            }
+        except Exception:
+            return {
+                "route": "docs-only",
+                "route_reason": "semantic router unavailable; safe docs-only fallback",
+                "router_latency_s": time.perf_counter() - started,
+                "router_usage": {},
+            }
 
     def route_edge(state: AppState) -> Literal["analyze_kpi", "retrieve"]:
         return "analyze_kpi" if state.get("route") == "kpi+docs" else "retrieve"
@@ -201,6 +221,7 @@ def build_graph(
 
         generation_latency_s = float(result.get("latency_s", 0.0))
         retrieval_latency_s = float(state.get("retrieval_latency_s", 0.0))
+        router_latency_s = float(state.get("router_latency_s", 0.0))
         if state.get("route") != "kpi+docs":
             # Hard guard: docs-only output contains only the factual answer and optional
             # technical interpretation. Rebuild the raw answer too so hidden hypothesis
@@ -211,9 +232,22 @@ def build_graph(
             if clean_answer:
                 result["answer"] = clean_answer
 
+        generation_usage = result.get("llm_usage") or {}
+        router_usage = state.get("router_usage") or {}
+        result["llm_usage"] = {
+            "input_tokens": int(generation_usage.get("input_tokens", 0))
+            + int(router_usage.get("input_tokens", 0)),
+            "output_tokens": int(generation_usage.get("output_tokens", 0))
+            + int(router_usage.get("output_tokens", 0)),
+            "total_tokens": int(generation_usage.get("total_tokens", 0))
+            + int(router_usage.get("total_tokens", 0)),
+        }
+        result["router_latency_s"] = router_latency_s
         result["generation_latency_s"] = generation_latency_s
         result["retrieval_latency_s"] = retrieval_latency_s
-        result["total_latency_s"] = retrieval_latency_s + generation_latency_s
+        result["total_latency_s"] = (
+            router_latency_s + retrieval_latency_s + generation_latency_s
+        )
         # Keep latency_s for UI/backward compatibility, now as end-to-end RAG latency.
         result["latency_s"] = result["total_latency_s"]
         return result
