@@ -1,0 +1,242 @@
+[
+  {
+    "id": "r01",
+    "question": "What does RSRP measure?",
+    "expected_route": "docs-only",
+    "has_observation": true
+  },
+  {
+    "id": "r02",
+    "question": "Can you define SINR for me?",
+    "expected_route": "docs-only",
+    "has_observation": true
+  },
+  {
+    "id": "r03",
+    "question": "How does CQI influence MCS conceptually?",
+    "expected_route": "docs-only",
+    "has_observation": true
+  },
+  {
+    "id": "r04",
+    "question": "Why can interference reduce throughput in general?",
+    "expected_route": "docs-only",
+    "has_observation": true
+  },
+  {
+    "id": "r05",
+    "question": "What is the difference between RSRP and SINR?",
+    "expected_route": "docs-only",
+    "has_observation": true
+  },
+  {
+    "id": "r06",
+    "question": "How is rank indicator used in NR?",
+    "expected_route": "docs-only",
+    "has_observation": true
+  },
+  {
+    "id": "r07",
+    "question": "What does 3GPP TS 38.215 cover?",
+    "expected_route": "docs-only",
+    "has_observation": true
+  },
+  {
+    "id": "r08",
+    "question": "Explain why stronger signal power does not always mean higher throughput.",
+    "expected_route": "docs-only",
+    "has_observation": true
+  },
+  {
+    "id": "r09",
+    "question": "How does link adaptation work between CQI and modulation?",
+    "expected_route": "docs-only",
+    "has_observation": true
+  },
+  {
+    "id": "r10",
+    "question": "What is PDSCH?",
+    "expected_route": "docs-only",
+    "has_observation": true
+  },
+  {
+    "id": "r11",
+    "question": "What can you tell from the values I entered?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r12",
+    "question": "Do these measurements look unusual?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r13",
+    "question": "What stands out here?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r14",
+    "question": "Can you diagnose this observation?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r15",
+    "question": "Why is the throughput low for this measurement?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r16",
+    "question": "Is this throughput surprising given the other radio values?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r17",
+    "question": "What relationships can you see in the values given?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r18",
+    "question": "Are any of these KPIs inconsistent with the others?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r19",
+    "question": "How does this sample compare with similar measurements?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r20",
+    "question": "Does anything suggest this point is an outlier?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r21",
+    "question": "Based on this row, what should I investigate first?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r22",
+    "question": "What might explain the performance of this particular observation?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r23",
+    "question": "Is the CQI unusually low relative to the SINR here?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r24",
+    "question": "Is MCS behaving as expected for these values?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r25",
+    "question": "What does the reference dataset say about this measurement?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r26",
+    "question": "Compare this sample to the rest of the measurements.",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r27",
+    "question": "Are there correlations in the supplied data that help interpret this row?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r28",
+    "question": "Given these numbers, is throughput below what similar samples achieve?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r29",
+    "question": "Does the combination of KPIs look rare?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r30",
+    "question": "What is odd about my measurement, if anything?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r31",
+    "question": "Why does SINR matter for throughput?",
+    "expected_route": "docs-only",
+    "has_observation": true
+  },
+  {
+    "id": "r32",
+    "question": "Does SINR appear related to throughput in these measurements?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r33",
+    "question": "What generally causes low CQI?",
+    "expected_route": "docs-only",
+    "has_observation": true
+  },
+  {
+    "id": "r34",
+    "question": "Why is CQI low in this sample?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r35",
+    "question": "How are RSRP and throughput related theoretically?",
+    "expected_route": "docs-only",
+    "has_observation": true
+  },
+  {
+    "id": "r36",
+    "question": "Is RSRP associated with throughput in this dataset?",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r37",
+    "question": "Explain these numbers to me.",
+    "expected_route": "kpi+docs",
+    "has_observation": true
+  },
+  {
+    "id": "r38",
+    "question": "Explain MCS to me.",
+    "expected_route": "docs-only",
+    "has_observation": true
+  },
+  {
+    "id": "r39",
+    "question": "What stands out in the network?",
+    "expected_route": "docs-only",
+    "has_observation": false
+  },
+  {
+    "id": "r40",
+    "question": "Can you diagnose these values?",
+    "expected_route": "docs-only",
+    "has_observation": false
+  }
+]
