@@ -314,6 +314,13 @@ Optionally, when useful:
 ## Technical interpretation
 A concise source-supported explanation of the mechanism.
 
+Citation requirements:
+- When retrieved context is present, the answer MUST contain at least one inline citation.
+- Put citations immediately after the factual claim they support, e.g. "RSRP measures
+  reference-signal received power [S1]."
+- Use only source IDs that appear in the retrieved context. Never invent a source ID.
+- Cite each substantive technical paragraph when it relies on retrieved evidence.
+
 Give a complete, technically useful answer at the depth the question deserves. For
 explanatory or analytical questions, explain the important relationships and mechanisms
 instead of reducing the answer to a few sentences. Avoid filler, but do not artificially
@@ -348,11 +355,17 @@ Only when a causal explanation is genuinely uncertain and useful:
 Clearly qualified possible explanations and what additional evidence would distinguish
 them. Never present hypotheses as measured facts.
 
-Cite source-supported technical claims with [S1], [S2], etc. Do not invent universal
-thresholds not supported by a source. Give enough detail to connect the statistical
-evidence to the technical mechanism. Prioritize the strongest findings, explain why they
-matter, and distinguish clearly between evidence and inference. Avoid filler, but do not
-artificially shorten the response."""
+Citation requirements:
+- When retrieved context is present, the answer MUST contain at least one inline citation.
+- Put citations immediately after the technical claim they support.
+- Use only source IDs that appear in the retrieved context. Never invent a source ID.
+- Do not cite user-entered KPI values or deterministic dataset statistics themselves;
+  cite the technical interpretation that connects those observations to telecom behavior.
+
+Do not invent universal thresholds not supported by a source. Give enough detail to
+connect the statistical evidence to the technical mechanism. Prioritize the strongest
+findings, explain why they matter, and distinguish clearly between evidence and inference.
+Avoid filler, but do not artificially shorten the response."""
 
 BASELINE_SYSTEM_PROMPT = """You are a telecom network analysis assistant.
 Answer from your pretrained knowledge only. If you are unsure, say so. Do not invent
@@ -420,7 +433,6 @@ def answer_with_rag(
     response = llm.invoke(
         [SystemMessage(content=system_prompt), HumanMessage(content=user)]
     )
-    latency = time.perf_counter() - start
     answer_text = message_text(response.content)
     if not answer_text:
         raise RuntimeError(
@@ -428,6 +440,20 @@ def answer_with_rag(
             "Reasoning is disabled for application calls to prevent hidden reasoning "
             "from consuming the output budget."
         )
+
+    if sources and not _has_valid_inline_citation(answer_text, sources):
+        repaired = _repair_missing_citations(
+            llm,
+            question=question,
+            answer_text=answer_text,
+            context=context,
+            sources=sources,
+            use_kpi_context=use_kpi_context,
+        )
+        if repaired:
+            answer_text = repaired
+
+    latency = time.perf_counter() - start
     return {
         "answer": answer_text,
         "answer_sections": parse_answer_sections(answer_text),
