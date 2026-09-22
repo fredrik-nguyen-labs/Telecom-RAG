@@ -106,6 +106,8 @@ Generation compares the same LLM with and without retrieved context and tracks c
 
 The benchmark contains 20 hand-auditable telecom questions spanning standards, corpus-specific facts, diagnostics and cross-source reasoning.
 
+See [RESULTS.md](RESULTS.md) for the current benchmark results.
+
 ## Quick start
 
 Requires Python 3.12 and `uv`.
