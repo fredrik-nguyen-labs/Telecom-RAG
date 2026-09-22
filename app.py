@@ -107,6 +107,19 @@ def cached_kpis(backend: str) -> pd.DataFrame | None:
 
 if "request_units_used" not in st.session_state:
     st.session_state.request_units_used = 0
+if "chat_messages" not in st.session_state:
+    st.session_state.chat_messages = []
+
+
+def _conversation_context(max_messages: int = 4, max_chars_per_message: int = 500) -> str:
+    """Return a small recent-history window for follow-up questions."""
+    lines: list[str] = []
+    for message in st.session_state.chat_messages[-max_messages:]:
+        role = "User" if message.get("role") == "user" else "Assistant"
+        content = str(message.get("content", "")).strip()
+        if content:
+            lines.append(f"{role}: {content[:max_chars_per_message]}")
+    return "\n".join(lines)
 
 
 st.title("📡 5G Network Diagnostics RAG Assistant")
@@ -454,9 +467,17 @@ def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
     citation_order, claims = _citation_claims(answer)
     if not citation_order:
         st.info(
-            "Retrieved evidence was available, but the answer did not include inline "
-            "source markers for this response."
+            "The answer did not include inline [S#] markers. The retrieved evidence "
+            "used for this response is still available below."
         )
+        st.subheader("Retrieved evidence")
+        for rank, source in enumerate(sources[:3], start=1):
+            title = source.get("title") or source.get("source") or "Unknown source"
+            with st.expander(f"{rank}. {title}", expanded=rank == 1):
+                st.code(
+                    source.get("content") or source.get("excerpt") or "",
+                    language=None,
+                )
         return
 
     by_id = {source.get("citation"): source for source in sources}
@@ -505,7 +526,7 @@ else:
     model = os.getenv("OLLAMA_MODEL", OLLAMA_MODEL)
     router_model = model
 
-retrieval_mode = "reranked" if using_supabase else "dense_reranked"
+retrieval_mode = "reranked"
 top_k = TOP_K
 
 
@@ -632,6 +653,15 @@ with left:
 with right:
     st.subheader("2. Ask a question")
 
+    if st.session_state.chat_messages:
+        if st.button("New conversation"):
+            st.session_state.chat_messages = []
+            st.rerun()
+
+        for message in st.session_state.chat_messages[-8:]:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
     if observation_mode == "Enter your own KPIs" and observation:
         default_q = (
             "Diagnose these values. What stands out, what could explain the throughput, "
@@ -644,6 +674,9 @@ with right:
         )
     else:
         default_q = "What do RSRP and SINR measure in a 5G NR network?"
+
+    if st.session_state.chat_messages:
+        default_q = ""
 
     question = st.text_area(
         "Question",
@@ -702,24 +735,57 @@ if run:
             retrieval_mode=retrieval_mode,
         )
 
+        conversation_context = _conversation_context()
         with st.spinner("Running the LangGraph workflow..."):
             result = graph.invoke(
                 {
                     "question": cleaned_question,
+                    "conversation_context": conversation_context,
                     "use_rag": True,
                     "observation": observation,
                 }
             )
 
+        answer_text = str(result.get("answer", "")).strip()
+        if not answer_text:
+            raise RuntimeError("The model returned an empty visible answer.")
+
+        st.session_state.chat_messages.extend(
+            [
+                {"role": "user", "content": cleaned_question},
+                {"role": "assistant", "content": answer_text},
+            ]
+        )
+
         _render_answer_cards(result)
         _render_kpi_analytics(result)
 
         sources = result.get("sources", [])
-        _render_cited_evidence(result["answer"], sources)
+        _render_cited_evidence(answer_text, sources)
+
+        with st.expander("Technical details"):
+            st.write(
+                "Route:",
+                "KPI + docs" if result.get("route") == "kpi+docs" else "Docs only",
+            )
+            st.write("Retrieval:", result.get("retrieval_mode", retrieval_mode))
+            st.write("Retrieved chunks:", len(sources))
+            st.write(
+                "Latency:",
+                {
+                    "routing_s": round(float(result.get("router_latency_s", 0)), 2),
+                    "retrieval_s": round(float(result.get("retrieval_latency_s", 0)), 2),
+                    "generation_s": round(
+                        float(result.get("generation_latency_s", result.get("latency_s", 0))),
+                        2,
+                    ),
+                },
+            )
 
     except Exception as exc:
         st.error(
-            "The request could not be completed. Please try again."
+            "The request failed. Check the technical error below for a Cloudflare, "
+            "Supabase, retrieval, or model-response issue."
         )
         with st.expander("Technical error"):
             st.exception(exc)
