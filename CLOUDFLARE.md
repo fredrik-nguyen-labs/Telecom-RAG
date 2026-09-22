@@ -1,130 +1,117 @@
-# Cloudflare Workers AI setup
+# Cloudflare Workers AI
 
-Telecom-RAG uses **Cloudflare Workers AI** as the recommended hosted LLM for the public demo.
+Telecom-RAG can use Cloudflare Workers AI for hosted generation, query embeddings and reranking.
 
-The default hosted model is:
-
-```text
-@cf/meta/llama-3.2-3b-instruct
-```
-
-Local development still defaults to Ollama/Qwen3 4B.
-
-## Architecture
+The default hosted models are:
 
 ```text
-Streamlit
-   ↓
-Supabase pgvector + Postgres FTS
-   ↓
-cross-encoder reranker
-   ↓
-Cloudflare Workers AI
-   ↓
-Llama 3.2 3B Instruct
+generation:  @cf/meta/llama-3.2-3b-instruct
+embeddings:  @cf/baai/bge-small-en-v1.5
+reranker:    @cf/baai/bge-reranker-base
 ```
 
-Cloudflare exposes an OpenAI-compatible Chat Completions endpoint, so the project can
-reuse LangChain's `ChatOpenAI` adapter with a different base URL.
+Cloudflare's BGE-small model returns 384-dimensional embeddings, which matches the
+Supabase vector schema used by this project.
 
-## 1. Create a Cloudflare account
+## 1. Create credentials
 
-Create/log into a Cloudflare account and open **Workers AI** in the dashboard.
+In the Cloudflare dashboard:
 
-No domain or website is required for the REST API path used by this project.
+1. Open **Workers AI**.
+2. Choose **Use REST API**.
+3. Create a Workers AI API token.
+4. Copy the API token and Account ID.
 
-## 2. Get the Account ID and API token
+If you create a custom token instead of the template, give it the Workers AI permissions
+required by Cloudflare.
 
-In **Workers AI**, choose **Use REST API**.
+Keep the token private and never commit it.
 
-Copy:
+## 2. Configure the environment
 
-```text
-Account ID
-```
-
-Then create a **Workers AI API Token**. If creating a custom token, it needs Workers AI
-read/edit permissions.
-
-Keep the token private. Do not commit it to GitHub.
-
-## 3. Test the token locally
-
-Set:
+Linux/macOS:
 
 ```bash
-export CLOUDFLARE_ACCOUNT_ID="YOUR_ACCOUNT_ID"
-export CLOUDFLARE_API_TOKEN="YOUR_API_TOKEN"
+export CLOUDFLARE_ACCOUNT_ID="..."
+export CLOUDFLARE_API_TOKEN="..."
 export CLOUDFLARE_MODEL="@cf/meta/llama-3.2-3b-instruct"
+export CLOUDFLARE_EMBEDDING_MODEL="@cf/baai/bge-small-en-v1.5"
+export CLOUDFLARE_RERANKER_MODEL="@cf/baai/bge-reranker-base"
+export USE_CLOUDFLARE_RETRIEVAL=true
 ```
 
-Then run the app:
+PowerShell:
 
-```bash
-uv run streamlit run app.py
+```powershell
+$env:CLOUDFLARE_ACCOUNT_ID="..."
+$env:CLOUDFLARE_API_TOKEN="..."
+$env:CLOUDFLARE_MODEL="@cf/meta/llama-3.2-3b-instruct"
+$env:CLOUDFLARE_EMBEDDING_MODEL="@cf/baai/bge-small-en-v1.5"
+$env:CLOUDFLARE_RERANKER_MODEL="@cf/baai/bge-reranker-base"
+$env:USE_CLOUDFLARE_RETRIEVAL="true"
 ```
 
-If those variables are present, the sidebar should show:
-
-```text
-Free hosted LLM configured
-Provider: Cloudflare Workers AI
-```
-
-The app uses this OpenAI-compatible base URL internally:
+The generation client uses Cloudflare's OpenAI-compatible endpoint:
 
 ```text
 https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai/v1
 ```
 
-## 4. Add the credentials to Streamlit Community Cloud
+Embeddings and reranking use the Workers AI model execution API.
 
-Open the deployed Streamlit app's **Settings -> Secrets** and add:
+## 3. Use Cloudflare in Notebook 02
 
-```toml
-CLOUDFLARE_ACCOUNT_ID = "YOUR_ACCOUNT_ID"
-CLOUDFLARE_API_TOKEN = "YOUR_API_TOKEN"
-CLOUDFLARE_MODEL = "@cf/meta/llama-3.2-3b-instruct"
-
-USE_SUPABASE = "true"
-SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
-SUPABASE_PUBLISHABLE_KEY = "YOUR_PUBLISHABLE_KEY"
-```
-
-You do not need an OpenAI API key for this deployment.
-
-## 5. Free-tier behavior
-
-Workers AI has a daily free inference allocation. When the free allocation is exhausted,
-Cloudflare rejects further free-plan inference until the quota resets.
-
-This makes it appropriate for a low-traffic portfolio demo, but it is not an unlimited
-public inference service.
-
-The application also retains its per-browser-session request-unit guardrail to reduce
-accidental usage.
-
-## 6. Changing the model
-
-The model is configurable without code changes:
+Start Jupyter **from the same terminal where the environment variables are set**:
 
 ```bash
-export CLOUDFLARE_MODEL="@cf/meta/llama-3.2-1b-instruct"
+uv run jupyter lab
 ```
 
-or set the corresponding Streamlit secret.
-
-The default 3B model is intentionally modest: retrieval and citations provide the factual
-context, while the LLM mainly synthesizes the retrieved telecom evidence.
-
-## 7. Optional fallbacks
-
-Provider priority in the Streamlit app is:
+Notebook 02 already detects the two required variables:
 
 ```text
-Cloudflare configured → Cloudflare Workers AI
-else OpenAI configured → OpenAI
-else → selectable local Ollama / Cloudflare / OpenAI
+CLOUDFLARE_ACCOUNT_ID
+CLOUDFLARE_API_TOKEN
 ```
 
-For the public deployment, Cloudflare + Supabase is the intended zero-OpenAI-credit path.
+When both exist, its generation evaluation selects the Cloudflare provider instead of
+local Ollama.
+
+You can verify it in the notebook cell that prints:
+
+```text
+Evaluation provider: cloudflare
+Evaluation model: ...
+```
+
+The default notebook retrieval experiments remain local FAISS + BM25 + local reranking;
+Cloudflare is used for the generator unless you explicitly construct the hosted Supabase
+retriever.
+
+## 4. Streamlit Community Cloud
+
+Add the same values to **App settings → Secrets**:
+
+```toml
+CLOUDFLARE_ACCOUNT_ID = "..."
+CLOUDFLARE_API_TOKEN = "..."
+CLOUDFLARE_MODEL = "@cf/meta/llama-3.2-3b-instruct"
+CLOUDFLARE_EMBEDDING_MODEL = "@cf/baai/bge-small-en-v1.5"
+CLOUDFLARE_RERANKER_MODEL = "@cf/baai/bge-reranker-base"
+USE_CLOUDFLARE_RETRIEVAL = "true"
+```
+
+See `.streamlit/secrets.toml.example`.
+
+## 5. Failure behavior
+
+The hosted retrieval path uses:
+
+```text
+pgvector + PostgreSQL FTS
+→ RRF
+→ Cloudflare BGE reranker
+```
+
+If the optional reranker times out or is temporarily unavailable, the request falls back
+to the already-fused RRF ranking instead of failing the whole RAG request.
