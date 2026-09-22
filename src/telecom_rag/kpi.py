@@ -400,7 +400,11 @@ def _nearest_neighbor_analysis(
     neighbor_positions = np.argsort(distances)[:n_neighbors]
     neighbors = candidate_df.iloc[neighbor_positions]
 
-    throughput = pd.to_numeric(neighbors.get("throughput_mbps"), errors="coerce").dropna()
+    throughput = (
+        pd.to_numeric(neighbors["throughput_mbps"], errors="coerce").dropna()
+        if "throughput_mbps" in neighbors.columns
+        else pd.Series(dtype=float)
+    )
     result: dict[str, Any] = {
         "features": valid_features,
         "feature_labels": [KPI_LABELS[column] for column in valid_features],
