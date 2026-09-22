@@ -1,0 +1,10 @@
+# Lightweight Streamlit Community Cloud runtime.
+# Local development continues to use uv/pyproject.toml.
+numpy==2.5.3
+pandas==3.0.6
+requests==2.34.2
+langchain==1.4.2
+langgraph==1.2.11
+langchain-openai==1.6.2
+streamlit==1.64.0
+supabase==2.31.0
