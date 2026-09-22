@@ -464,7 +464,12 @@ if run:
         )
         meta_cols[4].metric("Chunks", len(result.get("sources", [])))
         meta_cols[5].metric(
-            "Latency", f"{result.get('latency_s', 0):.2f} s"
+            "Total latency", f"{result.get('total_latency_s', result.get('latency_s', 0)):.2f} s"
+        )
+        st.caption(
+            "Latency breakdown: "
+            f"retrieval {result.get('retrieval_latency_s', 0):.2f}s · "
+            f"generation {result.get('generation_latency_s', result.get('latency_s', 0)):.2f}s"
         )
 
         if result.get("retrieval_query"):
@@ -539,7 +544,11 @@ if run:
 
             st.subheader("Same LLM without RAG")
             st.markdown(baseline["answer"])
-            st.caption(f"Latency: {baseline.get('latency_s', 0):.2f} s")
+            st.caption(
+                "Latency: "
+                f"{baseline.get('total_latency_s', baseline.get('latency_s', 0)):.2f}s "
+                f"(generation {baseline.get('generation_latency_s', baseline.get('latency_s', 0)):.2f}s)"
+            )
 
     except Exception as exc:
         st.error(
