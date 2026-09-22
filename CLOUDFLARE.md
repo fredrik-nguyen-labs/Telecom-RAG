@@ -89,9 +89,10 @@ Evaluation provider: cloudflare
 Evaluation model: ...
 ```
 
-The default notebook retrieval experiments remain local FAISS + BM25 + local reranking;
-Cloudflare is used for the generator unless you explicitly construct the hosted Supabase
-retriever.
+The notebook evaluates the current local FAISS dense + cross-encoder path alongside
+BM25/RRF ablations. Cloudflare is used for generation when its credentials are present;
+the hosted Supabase retrieval benchmark is handled separately by
+`scripts/evaluate_hosted.py`.
 
 ## 4. Streamlit Community Cloud
 
