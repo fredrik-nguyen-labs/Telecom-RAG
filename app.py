@@ -869,9 +869,22 @@ if run:
         _render_kpi_analytics(result)
 
         if use_rag:
+            sources = result.get("sources", [])
+            fallback_sources = [
+                source
+                for source in sources
+                if source.get("reranker_backend") == "hybrid-rrf-fallback"
+            ]
+            if fallback_sources:
+                st.info(
+                    "Cloudflare reranking was unavailable or too slow for this request, "
+                    "so the app used the already-fused Supabase hybrid/RRF ranking instead. "
+                    "The answer still uses retrieved documents; only the optional rerank "
+                    "step was skipped."
+                )
             _render_cited_evidence(
                 result["answer"],
-                result.get("sources", []),
+                sources,
             )
 
         meta_cols = st.columns(6)
@@ -929,6 +942,10 @@ if run:
                     if source.get("rerank_score") is not None:
                         details.append(
                             f"rerank score {source['rerank_score']:.3f}"
+                        )
+                    if source.get("reranker_backend"):
+                        details.append(
+                            f"reranker {source['reranker_backend']}"
                         )
                     if details:
                         st.caption(" · ".join(details))
