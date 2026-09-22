@@ -30,11 +30,13 @@ CHUNKING_VERSION = "section-aware-v2"
 
 TOP_K = int(os.getenv("RAG_TOP_K", "4"))
 DENSE_CANDIDATES = int(os.getenv("RAG_DENSE_CANDIDATES", "15"))
+# BM25/RRF remain available for controlled retrieval ablations, but are not used
+# by the default local application path.
 BM25_CANDIDATES = int(os.getenv("RAG_BM25_CANDIDATES", "15"))
 RERANK_CANDIDATES = int(os.getenv("RAG_RERANK_CANDIDATES", "20"))
 RRF_K = int(os.getenv("RAG_RRF_K", "60"))
 
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 
 # Hosted inference. Workers AI exposes an OpenAI-compatible Chat Completions endpoint,
 # so the LangChain interface is shared with the rest of the application.
@@ -56,14 +58,11 @@ USE_CLOUDFLARE_RETRIEVAL = os.getenv(
     "USE_CLOUDFLARE_RETRIEVAL", "true"
 ).lower() in {"1", "true", "yes", "on"}
 
-# Optional paid fallback.
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 
 # Hosted-application safety defaults.
 MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "1400"))
 MAX_QUESTION_CHARS = int(os.getenv("MAX_QUESTION_CHARS", "700"))
 MAX_REQUEST_UNITS_PER_SESSION = int(os.getenv("MAX_REQUEST_UNITS_PER_SESSION", "12"))
-MAX_TOP_K_PUBLIC = int(os.getenv("MAX_TOP_K_PUBLIC", "5"))
 
 
 # Hosted persistence/vector sync.
