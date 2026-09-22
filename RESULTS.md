@@ -12,7 +12,7 @@ The local retrieval benchmark evaluates all 20 questions at `k=4`.
 | Hybrid BGE + BM25 + RRF | 0.850 | 0.850 | 0.650 | 0.817 | **0.800** | 0.021 s |
 | Hybrid + cross-encoder reranking | **0.900** | **0.875** | **0.788** | **0.829** | 0.775 | 1.141 s |
 
-The reranker improved source precision and MRR relative to dense retrieval, at a substantial latency cost. Adding BM25/RRF alone did not improve source recall over dense retrieval. Based on this ablation, the default local application path now uses dense BGE/FAISS candidates followed directly by the cross-encoder reranker; BM25/RRF is retained only for evaluation experiments.
+The historical ablation shows that BM25/RRF alone did not improve source recall over dense retrieval, while the hybrid+reranker configuration improved precision and MRR at a substantial latency cost. The default local application path has since been simplified to dense BGE/FAISS candidates followed directly by the cross-encoder reranker. That exact dense+reranker path was introduced after this recorded run, so its metrics are not retroactively inferred from the hybrid+reranker row; rerun the notebook to measure it directly.
 
 ## Local generation
 
