@@ -454,8 +454,8 @@ def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
     citation_order, claims = _citation_claims(answer)
     if not citation_order:
         st.info(
-            "The answer did not emit an [S#] citation even though retrieval returned "
-            "evidence. The retrieved candidates are shown below."
+            "Retrieved evidence was available, but the answer did not include inline "
+            "source markers for this response."
         )
         return
 
@@ -734,7 +734,7 @@ st.caption(
 
 st.markdown("#### Tech stack")
 st.caption(
-    "Python · Streamlit · LangGraph · LangChain · Supabase/PostgreSQL + pgvector · "
-    "Cloudflare Workers AI · BGE embeddings/reranking · FAISS · Ollama"
+    "Python · Streamlit · LangGraph · LangChain · Supabase/PostgreSQL + pgvector/FTS · "
+    "Cloudflare Workers AI · BGE embeddings/reranking"
 )
 
