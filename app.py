@@ -16,10 +16,9 @@ from telecom_rag.config import (
     CLOUDFLARE_ROUTER_MODEL,
     MAX_QUESTION_CHARS,
     MAX_REQUEST_UNITS_PER_SESSION,
-    MAX_TOP_K_PUBLIC,
-    OPENAI_MODEL,
     OLLAMA_MODEL,
     PROCESSED_KPI_PATH,
+    TOP_K,
 )
 from telecom_rag.graph import build_graph
 from telecom_rag.rag import get_llm
@@ -35,7 +34,7 @@ st.set_page_config(
     page_title="Telecom RAG",
     page_icon="📡",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 
@@ -57,8 +56,6 @@ for secret_name in (
     "CLOUDFLARE_EMBEDDING_MODEL",
     "CLOUDFLARE_RERANKER_MODEL",
     "USE_CLOUDFLARE_RETRIEVAL",
-    "OPENAI_API_KEY",
-    "OPENAI_MODEL",
     "USE_SUPABASE",
     "SUPABASE_URL",
     "SUPABASE_PUBLISHABLE_KEY",
@@ -114,18 +111,15 @@ if "request_units_used" not in st.session_state:
 
 st.title("📡 5G Network Diagnostics RAG Assistant")
 st.caption(
-    "Real Ericsson/AERPAW KPI measurements + LangGraph + grounded hybrid RAG. "
-    "Hosted: Supabase pgvector + PostgreSQL FTS + RRF. "
-    "Local/notebooks: FAISS + BM25 + RRF."
+    "Grounded 5G diagnostics using real Ericsson/AERPAW measurements and "
+    "telecom standards and technical documentation."
 )
 st.markdown(
     "🔗 [GitHub repository](https://github.com/fredrik-nguyen-labs/Telecom-RAG)"
 )
-
-st.info(
-    "How to use: select a dataset observation or enter your own KPIs, then ask either "
-    "a question about the measurement or a general 5G/telecom question. The app "
-    "automatically chooses the appropriate analysis and retrieval path."
+st.caption(
+    "Select a measurement or enter your own KPIs, ask a question, and review "
+    "the data-backed diagnosis and cited evidence."
 )
 
 
@@ -193,7 +187,6 @@ else:
 cloudflare_available = bool(
     os.getenv("CLOUDFLARE_ACCOUNT_ID") and os.getenv("CLOUDFLARE_API_TOKEN")
 )
-openai_available = bool(os.getenv("OPENAI_API_KEY"))
 remaining_units = max(
     0, MAX_REQUEST_UNITS_PER_SESSION - st.session_state.request_units_used
 )
@@ -496,150 +489,24 @@ def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
             for claim in claims.get(citation_id, []):
                 st.markdown(f"- {claim}")
 
-            details = []
-            if source.get("retrieval_methods"):
-                details.append(f"retrieved by {source['retrieval_methods']}")
-            if source.get("rerank_score") is not None:
-                details.append(f"rerank score {source['rerank_score']:.3f}")
-            if details:
-                st.caption(" · ".join(details))
-
             st.markdown("**Exact retrieved evidence chunk**")
             st.code(source.get("content") or source.get("excerpt") or "", language=None)
 
 
-with st.sidebar:
-    st.header("Controls")
+if cloudflare_available:
+    provider = "cloudflare"
+    model = os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_GENERATOR_MODEL)
+    router_model = os.getenv("CLOUDFLARE_ROUTER_MODEL", CLOUDFLARE_ROUTER_MODEL)
+elif hosted_lightweight:
+    st.error("Hosted inference is not configured.")
+    st.stop()
+else:
+    provider = "ollama"
+    model = os.getenv("OLLAMA_MODEL", OLLAMA_MODEL)
+    router_model = model
 
-    if cloudflare_available:
-        provider = "cloudflare"
-        model = os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_GENERATOR_MODEL)
-        st.success("Hosted LLM configured")
-        router_model = os.getenv("CLOUDFLARE_ROUTER_MODEL", CLOUDFLARE_ROUTER_MODEL)
-        st.caption(f"Generator: {model}")
-        st.caption(f"Semantic router: {router_model}")
-    elif openai_available:
-        provider = "openai"
-        model = os.getenv("OPENAI_MODEL", OPENAI_MODEL)
-        st.success("Hosted LLM configured")
-        st.caption(f"Provider: OpenAI · Model: {model}")
-    else:
-        provider = st.selectbox(
-            "LLM provider", ["ollama", "cloudflare", "openai"], index=0
-        )
-        if provider == "ollama":
-            model = st.text_input(
-                "Ollama model", value=os.getenv("OLLAMA_MODEL", OLLAMA_MODEL)
-            )
-            st.caption("Local/free. Start Ollama before running the app.")
-        elif provider == "cloudflare":
-            model = st.text_input(
-                "Cloudflare model",
-                value=os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_GENERATOR_MODEL),
-            )
-            st.warning(
-                "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN to use "
-                "Workers AI."
-            )
-        else:
-            model = st.text_input(
-                "OpenAI model", value=os.getenv("OPENAI_MODEL", OPENAI_MODEL)
-            )
-            st.warning("OPENAI_API_KEY is not configured.")
-
-    use_rag = st.toggle("Use RAG", value=True)
-    retrieval_mode = "reranked"
-    st.caption(
-        "Retrieval: hybrid dense + lexical search → RRF → reranking. "
-        "If hosted reranking is unavailable, the app falls back to the fused RRF ranking."
-    )
-    compare = st.toggle(
-        "Also run the LLM-only baseline",
-        value=False,
-        help="This makes a second LLM request and therefore uses an extra request unit.",
-    )
-    top_k = st.slider(
-        "Retrieved chunks",
-        min_value=2,
-        max_value=MAX_TOP_K_PUBLIC,
-        value=min(4, MAX_TOP_K_PUBLIC),
-    )
-
-    st.divider()
-    st.subheader("Usage limits")
-    st.metric("Request units left in this session", remaining_units)
-    st.caption(
-        "One answer = 1 unit. Enabling the baseline comparison uses 2 units. "
-        "This is a browser-session convenience guardrail; provider-side quotas and "
-        "billing controls are managed in the provider dashboard."
-    )
-
-    st.divider()
-    st.subheader("Project state")
-    if using_supabase:
-        st.success("Hosted retrieval: Supabase + Cloudflare")
-        st.write(
-            "Current document chunks:",
-            f"{int(supabase_status.get('document_chunks_current', 0)):,}",
-        )
-        st.write(
-            "KPI observations:",
-            f"{int(supabase_status.get('kpi_observations', 0)):,}",
-        )
-        st.write("Dense retrieval:", "✅ pgvector HNSW")
-        st.write("Lexical retrieval:", "✅ PostgreSQL FTS")
-        st.write("Fusion:", "✅ Reciprocal-rank fusion (RRF)")
-        st.write("Reranker:", "✅ Cloudflare BGE (with RRF fallback)")
-    else:
-        st.info("Storage: local reproducible fallback")
-        st.write("KPI table:", "✅" if bootstrap and bootstrap.kpi_ready else "⚠️ docs-only")
-        st.write("RAG sources:", "✅" if bootstrap and bootstrap.docs_ready else "❌")
-        st.write("FAISS index:", "✅" if bootstrap and bootstrap.vector_ready else "❌")
-        if supabase_runtime_configured() and not using_supabase:
-            st.warning("Supabase configured but not seeded; using local storage.")
-            with st.expander("Supabase status/error"):
-                st.write(supabase_error or supabase_status)
-
-    with st.expander("About this project"):
-        st.markdown(
-            """
-            **Structured data:** real Ericsson/AERPAW 5G NSA KPI measurements.
-
-            **RAG corpus:** 10 configured public sources spanning:
-            - NR/LTE measurement standards,
-            - NR data procedures and architecture,
-            - the exact AERPAW Ericsson experiment,
-            - Ericsson material on beamforming, coverage/capacity and network performance.
-            """
-        )
-        if using_supabase:
-            st.markdown(
-                """
-                **Hosted retrieval path**
-                1. Cloudflare BGE creates the query embedding.
-                2. Supabase retrieves semantic candidates with pgvector/HNSW.
-                3. PostgreSQL full-text search retrieves lexical candidates.
-                4. Reciprocal-rank fusion combines the dense and FTS rankings.
-                5. Cloudflare BGE reranks the fused candidates when available.
-                6. If hosted reranking is slow or unavailable, the app uses the fused RRF
-                   ranking directly rather than failing the request.
-
-                **Important:** the hosted lexical retriever is PostgreSQL FTS, **not BM25**.
-                """
-            )
-        else:
-            st.markdown(
-                """
-                **Local/notebook retrieval path**
-                1. BGE + FAISS dense retrieval.
-                2. BM25 lexical retrieval.
-                3. Reciprocal-rank fusion.
-                4. Local cross-encoder reranking.
-
-                This local path is retained as the reproducible development/evaluation
-                baseline.
-                """
-            )
+retrieval_mode = "reranked" if using_supabase else "dense_reranked"
+top_k = TOP_K
 
 
 observation = None
@@ -786,7 +653,7 @@ with right:
         help=f"Maximum {MAX_QUESTION_CHARS} characters per request.",
     )
 
-    units_needed = 2 if compare and use_rag else 1
+    units_needed = 1
     run_disabled = units_needed > remaining_units
 
     if run_disabled:
@@ -839,146 +706,20 @@ if run:
             result = graph.invoke(
                 {
                     "question": cleaned_question,
-                    "use_rag": use_rag,
+                    "use_rag": True,
                     "observation": observation,
                 }
             )
 
-        route_label = (
-            "KPI diagnosis + technical documents"
-            if result.get("route") == "kpi+docs"
-            else "Technical documents only"
-        )
-        route_reason = result.get("route_reason")
-        if route_reason:
-            st.caption(f"Workflow: **{route_label}** · {route_reason}")
-        else:
-            st.caption(f"Workflow: **{route_label}**")
         _render_answer_cards(result)
         _render_kpi_analytics(result)
 
-        if use_rag:
-            sources = result.get("sources", [])
-            fallback_sources = [
-                source
-                for source in sources
-                if source.get("reranker_backend") == "hybrid-rrf-fallback"
-            ]
-            if fallback_sources:
-                st.info(
-                    "Cloudflare reranking was unavailable or too slow for this request, "
-                    "so the app used the already-fused Supabase hybrid/RRF ranking instead. "
-                    "The answer still uses retrieved documents; only the optional rerank "
-                    "step was skipped."
-                )
-            _render_cited_evidence(
-                result["answer"],
-                sources,
-            )
-
-        meta_cols = st.columns(6)
-        meta_cols[0].metric(
-            "Route",
-            "KPI + docs" if result.get("route") == "kpi+docs" else "Docs only",
-        )
-        meta_cols[1].metric("RAG", "On" if use_rag else "Off")
-        meta_cols[2].metric("Storage", "Supabase" if using_supabase else "Local")
-        meta_cols[3].metric(
-            "Retrieval", result.get("retrieval_mode", retrieval_mode)
-        )
-        meta_cols[4].metric("Chunks", len(result.get("sources", [])))
-        meta_cols[5].metric(
-            "Total latency", f"{result.get('total_latency_s', result.get('latency_s', 0)):.2f} s"
-        )
-        st.caption(
-            "Latency breakdown: "
-            f"routing {result.get('router_latency_s', 0):.2f}s · "
-            f"retrieval {result.get('retrieval_latency_s', 0):.2f}s · "
-            f"generation {result.get('generation_latency_s', result.get('latency_s', 0)):.2f}s"
-        )
-
-        if result.get("retrieval_query"):
-            with st.expander("Retrieval query"):
-                st.code(result["retrieval_query"])
-
-        if result.get("kpi_context"):
-            with st.expander("Data-derived KPI context sent to the LLM"):
-                st.code(result["kpi_context"])
-
-        if result.get("sources"):
-            st.subheader("All retrieved candidates")
-            st.caption(
-                "These are all final top-k chunks, including chunks the answer did not cite."
-            )
-            for source in result["sources"]:
-                page = (
-                    f" — page {source['page']}"
-                    if source.get("page")
-                    else ""
-                )
-                section = (
-                    f" — {source['section']}"
-                    if source.get("section")
-                    else ""
-                )
-                with st.expander(
-                    f"[{source['citation']}] {source['source']}{page}{section}"
-                ):
-                    details = []
-                    if source.get("retrieval_methods"):
-                        method_label = str(source["retrieval_methods"])
-                        if using_supabase:
-                            method_label = method_label.replace(
-                                "dense+fts", "dense + PostgreSQL FTS"
-                            ).replace("fts", "PostgreSQL FTS")
-                        else:
-                            method_label = method_label.replace(
-                                "dense+bm25", "dense + BM25"
-                            ).replace("bm25", "BM25")
-                        details.append(f"retrieved by {method_label}")
-                    if source.get("rerank_score") is not None:
-                        details.append(
-                            f"rerank score {source['rerank_score']:.3f}"
-                        )
-                    if source.get("reranker_backend"):
-                        details.append(
-                            f"reranker {source['reranker_backend']}"
-                        )
-                    if details:
-                        st.caption(" · ".join(details))
-                    st.write(source["excerpt"])
-
-        if compare and use_rag:
-            baseline_graph = build_graph(
-                llm,
-                retriever,
-                router_llm,
-                reference_df=kpis,
-                top_k=top_k,
-                retrieval_mode=retrieval_mode,
-            )
-            with st.spinner("Running the same LLM without retrieval..."):
-                baseline = baseline_graph.invoke(
-                    {
-                        "question": cleaned_question,
-                        "use_rag": False,
-                        "observation": observation,
-                    }
-                )
-
-            st.subheader("Same LLM without RAG")
-            st.markdown(baseline["answer"])
-            st.caption(
-                "Latency: "
-                f"{baseline.get('total_latency_s', baseline.get('latency_s', 0)):.2f}s "
-                f"(generation {baseline.get('generation_latency_s', baseline.get('latency_s', 0)):.2f}s)"
-            )
+        sources = result.get("sources", [])
+        _render_cited_evidence(result["answer"], sources)
 
     except Exception as exc:
         st.error(
-            "The request failed. Common causes are an unavailable local Ollama server, "
-            "a Cloudflare Workers AI token/quota/capacity issue, missing Supabase "
-            "migration/data, or a temporary provider error."
+            "The request could not be completed. Please try again."
         )
         with st.expander("Technical error"):
             st.exception(exc)
