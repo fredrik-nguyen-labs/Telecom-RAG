@@ -219,7 +219,9 @@ def _render_answer_cards(result: dict) -> None:
             st.markdown(sections["answer"])
 
     secondary = []
-    if sections.get("measured_evidence"):
+    is_kpi_route = result.get("route") == "kpi+docs"
+
+    if is_kpi_route and sections.get("measured_evidence"):
         secondary.append(("📊 Measured evidence", sections["measured_evidence"]))
     if sections.get("technical_interpretation"):
         secondary.append(
@@ -239,7 +241,7 @@ def _render_answer_cards(result: dict) -> None:
                 st.markdown(f"### {title}")
                 st.markdown(body)
 
-    if sections.get("hypotheses"):
+    if is_kpi_route and sections.get("hypotheses"):
         with st.container(border=True):
             st.markdown("### 🧭 Hypotheses")
             st.markdown(sections["hypotheses"])
@@ -607,7 +609,11 @@ if run:
             if result.get("route") == "kpi+docs"
             else "Technical documents only"
         )
-        st.caption(f"Workflow: **{route_label}**")
+        route_reason = result.get("route_reason")
+        if route_reason:
+            st.caption(f"Workflow: **{route_label}** · {route_reason}")
+        else:
+            st.caption(f"Workflow: **{route_label}**")
         _render_answer_cards(result)
 
         if use_rag:
