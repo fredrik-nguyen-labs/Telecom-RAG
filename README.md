@@ -1,5 +1,7 @@
 # Telecom-RAG
 
+**Live application:** [telecom-rag-3yyu7bhzs5ebhutyyserwy.streamlit.app](https://telecom-rag-3yyu7bhzs5ebhutyyserwy.streamlit.app/)
+
 **Telecom-RAG** is a retrieval-augmented diagnostics system for 5G radio-network measurements. It combines structured KPI analysis with standards and technical documentation so that questions about network behavior can be answered from both **measured evidence** and **retrieved domain knowledge**.
 
 The system is built around a simple principle: numerical observations, statistical relationships, retrieved technical facts, and model-generated hypotheses should remain distinguishable throughout the reasoning pipeline.
