@@ -263,12 +263,14 @@ def format_context(docs: list[Document]) -> tuple[str, list[dict[str, Any]]]:
                 "citation": f"S{idx}",
                 "source": source,
                 "source_id": source_id,
+                "title": doc.metadata.get("title"),
                 "page": page,
                 "section": section,
                 "chunk_id": doc.metadata.get("chunk_id"),
                 "retrieval_methods": doc.metadata.get("retrieval_methods"),
                 "rerank_score": doc.metadata.get("rerank_score"),
                 "excerpt": doc.page_content[:650],
+                "content": doc.page_content,
             }
         )
     return "\n\n---\n\n".join(blocks), sources
