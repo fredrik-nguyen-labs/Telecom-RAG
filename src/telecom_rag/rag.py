@@ -285,8 +285,9 @@ def format_context(docs: list[Document]) -> tuple[str, list[dict[str, Any]]]:
 
 RAG_SYSTEM_PROMPT = """You are a telecom network analysis assistant.
 Use the retrieved technical context as the factual knowledge source for technical claims.
-If KPI context is provided, treat it as measured evidence, but do not invent universal
-thresholds that are not supported by a retrieved source.
+If KPI context is provided, treat it as observation evidence. It may come from a real
+dataset row or from user-entered KPI values; preserve that distinction. Do not invent
+universal thresholds that are not supported by a retrieved source.
 
 Return the answer using these Markdown sections:
 
@@ -294,8 +295,9 @@ Return the answer using these Markdown sections:
 A direct answer to the user's actual question.
 
 If KPI context is present, also include:
-## Measured evidence
-Only measured KPI values and dataset-relative statistics that matter to the question.
+## Observation evidence
+Only KPI values and dataset-relative statistics that matter to the question. Clearly
+identify user-entered values as user-entered rather than measured.
 
 If technical explanation adds value, include:
 ## Technical interpretation
@@ -320,7 +322,7 @@ citations or pretend you consulted documents. Keep the answer concise and techni
 
 
 _SECTION_RE = re.compile(
-    r"(?im)^##\s+(Answer|Measured evidence|Technical interpretation|Hypotheses)\s*$"
+    r"(?im)^##\s+(Answer|Measured evidence|Observation evidence|Technical interpretation|Hypotheses)\s*$"
 )
 
 
@@ -332,7 +334,8 @@ def parse_answer_sections(text: str) -> dict[str, str]:
 
     key_map = {
         "answer": "answer",
-        "measured evidence": "measured_evidence",
+        "measured evidence": "observation_evidence",
+        "observation evidence": "observation_evidence",
         "technical interpretation": "technical_interpretation",
         "hypotheses": "hypotheses",
     }
@@ -388,7 +391,11 @@ def answer_with_rag(
     context, sources = format_context(retrieved_docs)
     user = f"Question:\n{question}\n\n"
     if kpi_context:
-        user += f"KPI context (measured/data-derived; no citation required):\n{kpi_context}\n\n"
+        user += (
+            "KPI context (observation values + dataset-relative statistics; "
+            "no citation required for the values themselves):\n"
+            f"{kpi_context}\n\n"
+        )
     user += f"Retrieved technical context:\n{context}"
 
     start = time.perf_counter()
