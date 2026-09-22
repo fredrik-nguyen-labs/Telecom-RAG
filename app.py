@@ -542,14 +542,6 @@ with chat_header_cols[1]:
             st.session_state.pop("pending_chat_question", None)
             st.rerun()
 
-st.selectbox(
-    "Suggested questions",
-    SUGGESTED_QUESTIONS,
-    key="suggested_question",
-    on_change=_apply_suggested_question,
-    help="Pick one to copy it into the message box below, then edit it if you want.",
-)
-
 chat_panel = st.container(height=400)
 with chat_panel:
     if not st.session_state.chat_messages:
@@ -693,6 +685,14 @@ with left:
 
 with right:
     st.subheader("2. Ask a question")
+
+    st.selectbox(
+        "Suggested questions",
+        SUGGESTED_QUESTIONS,
+        key="suggested_question",
+        on_change=_apply_suggested_question,
+        help="Pick one to copy it into the message box below, then edit it if you want.",
+    )
 
     units_needed = 1
     run_disabled = units_needed > remaining_units
