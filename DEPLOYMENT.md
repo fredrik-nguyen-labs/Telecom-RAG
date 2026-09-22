@@ -16,16 +16,29 @@ reciprocal-rank fusion
    ↓
 cross-encoder reranker
    ↓
-OpenAI
+Cloudflare Workers AI
 ```
 
 The local FAISS/BM25 backend remains available as a fallback.
 
-## 1. Create a separate OpenAI API project
+## 1. Configure Cloudflare Workers AI
 
-Use a dedicated OpenAI API project for the public demo and create a project-scoped API key.
+Create or sign into a Cloudflare account and open **Workers AI -> Use REST API**.
 
-Configure a small enforced spend limit and conservative rate limits. The Streamlit app also caps question length, output length, top-k retrieval, and per-browser-session requests, but the OpenAI project spend limit is the important billing protection.
+Create a Workers AI API token and copy:
+
+```text
+CLOUDFLARE_ACCOUNT_ID
+CLOUDFLARE_API_TOKEN
+```
+
+The default model is:
+
+```text
+@cf/meta/llama-3.2-3b-instruct
+```
+
+No OpenAI API key is required. See [`CLOUDFLARE.md`](CLOUDFLARE.md) for the full setup.
 
 ## 2. Create and seed Supabase
 
@@ -79,8 +92,9 @@ Choose an available Streamlit subdomain.
 In **App settings -> Secrets**, configure:
 
 ```toml
-OPENAI_API_KEY = "..."
-OPENAI_MODEL = "gpt-5.6-luna"
+CLOUDFLARE_ACCOUNT_ID = "..."
+CLOUDFLARE_API_TOKEN = "..."
+CLOUDFLARE_MODEL = "@cf/meta/llama-3.2-3b-instruct"
 
 USE_SUPABASE = "true"
 SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
@@ -139,14 +153,15 @@ The default retrieval mode should be `reranked`.
 
 ## 9. Troubleshooting
 
-### OpenAI error
+### Cloudflare Workers AI error
 
 Check that:
 
-- the API key belongs to the intended project,
-- the API project has available billing,
-- the project has not reached its enforced spend limit,
-- the configured model is enabled.
+- the Account ID is correct,
+- the API token has Workers AI permissions,
+- the configured model name is valid,
+- the daily free Workers AI allocation has not been exhausted,
+- Cloudflare currently has inference capacity for the model.
 
 ### Supabase configured but app uses local storage
 
