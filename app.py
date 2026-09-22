@@ -11,7 +11,6 @@ sys.path.insert(0, str(ROOT / "src"))
 import pandas as pd
 import streamlit as st
 
-from telecom_rag.bootstrap import ensure_demo_assets
 from telecom_rag.config import (
     CLOUDFLARE_MODEL,
     MAX_QUESTION_CHARS,
@@ -21,9 +20,8 @@ from telecom_rag.config import (
     OLLAMA_MODEL,
     PROCESSED_KPI_PATH,
 )
-from telecom_rag.data import load_processed_kpis
 from telecom_rag.graph import build_graph
-from telecom_rag.rag import get_llm, load_advanced_retriever
+from telecom_rag.rag import get_llm
 from telecom_rag.supabase_backend import (
     get_cloudflare_usage_today,
     get_supabase_status,
@@ -70,6 +68,8 @@ for secret_name in (
 
 @st.cache_resource(show_spinner="Preparing local demo assets...")
 def cached_bootstrap():
+    from telecom_rag.bootstrap import ensure_demo_assets
+
     return ensure_demo_assets()
 
 
@@ -77,6 +77,9 @@ def cached_bootstrap():
 def cached_retriever(backend: str):
     if backend == "supabase":
         return load_supabase_retriever()
+
+    from telecom_rag.rag import load_advanced_retriever
+
     return load_advanced_retriever(build_if_missing=False)
 
 
@@ -93,6 +96,9 @@ def cached_kpis(backend: str) -> pd.DataFrame | None:
 
     if not PROCESSED_KPI_PATH.exists():
         return None
+
+    from telecom_rag.data import load_processed_kpis
+
     return load_processed_kpis()
 
 
