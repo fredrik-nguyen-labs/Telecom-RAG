@@ -114,6 +114,21 @@ if "request_units_used" not in st.session_state:
 if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = []
 
+DEFAULT_CHAT_QUESTION = (
+    "Why might this measurement have this throughput, and which radio "
+    "measurements are most relevant to investigate?"
+)
+if "chat_draft" not in st.session_state:
+    st.session_state.chat_draft = DEFAULT_CHAT_QUESTION
+
+
+def _queue_chat_message() -> None:
+    """Capture the current draft and clear the input before the request runs."""
+    draft = str(st.session_state.get("chat_draft", "")).strip()
+    if draft:
+        st.session_state.pending_chat_question = draft
+        st.session_state.chat_draft = ""
+
 
 def _conversation_context(max_messages: int = 8, max_chars_per_message: int = 600) -> str:
     """Return a small recent-history window for follow-up questions."""
@@ -610,47 +625,46 @@ with right:
         if st.session_state.chat_messages:
             if st.button("New chat", use_container_width=True):
                 st.session_state.chat_messages = []
-                for key in list(st.session_state):
-                    if str(key).startswith("chat_question_"):
-                        del st.session_state[key]
+                st.session_state.chat_draft = DEFAULT_CHAT_QUESTION
+                st.session_state.pop("pending_chat_question", None)
                 st.rerun()
-
-    for message in st.session_state.chat_messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-            if message["role"] == "assistant":
-                _render_cited_evidence(
-                    message["content"],
-                    message.get("sources", []),
-                )
-
-    default_question = (
-        "Why might this measurement have this throughput, and which radio "
-        "measurements are most relevant to investigate?"
-    )
 
     units_needed = 1
     run_disabled = units_needed > remaining_units
     if run_disabled:
         st.warning("This session has reached its request limit.")
 
-    turn_index = len(st.session_state.chat_messages)
-    initial_value = default_question if not st.session_state.chat_messages else ""
-    with st.form("chat_form", clear_on_submit=False):
-        question = st.text_area(
-            "Message",
-            value=initial_value,
-            key=f"chat_question_{turn_index}",
-            height=220,
-            max_chars=MAX_QUESTION_CHARS,
-            disabled=run_disabled,
-        )
-        run = st.form_submit_button(
-            "Send",
-            type="primary",
-            use_container_width=True,
-            disabled=run_disabled,
-        )
+    st.text_area(
+        "Message",
+        key="chat_draft",
+        height=220,
+        max_chars=MAX_QUESTION_CHARS,
+        disabled=run_disabled,
+    )
+    st.button(
+        "Send",
+        type="primary",
+        use_container_width=True,
+        disabled=run_disabled,
+        on_click=_queue_chat_message,
+    )
+
+    st.caption("Conversation")
+    chat_panel = st.container(height=460)
+    with chat_panel:
+        if not st.session_state.chat_messages:
+            st.caption("Your conversation will appear here.")
+        for message in st.session_state.chat_messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+                if message["role"] == "assistant":
+                    _render_cited_evidence(
+                        message["content"],
+                        message.get("sources", []),
+                    )
+
+question = st.session_state.pop("pending_chat_question", "")
+run = bool(question)
 
 if run:
     cleaned_question = str(question).strip()
@@ -729,41 +743,7 @@ if run:
                 },
             ]
         )
-
-        with st.chat_message("user"):
-            st.markdown(cleaned_question)
-        with st.chat_message("assistant"):
-            _render_answer(result)
-            _render_cited_evidence(answer_text, sources)
-
-        with st.expander("Technical details"):
-            st.write(
-                "Route:",
-                "KPI + docs" if result.get("route") == "kpi+docs" else "Docs only",
-            )
-            st.write("Retrieval:", result.get("retrieval_mode", retrieval_mode))
-            st.write("Retrieved chunks:", len(sources))
-            provider_metadata = result.get("provider_metadata") or {}
-            if provider_metadata:
-                st.write(
-                    "Model response:",
-                    {
-                        "model": provider_metadata.get("model"),
-                        "finish_reason": provider_metadata.get("finish_reason"),
-                        "usage": provider_metadata.get("usage"),
-                    },
-                )
-            st.write(
-                "Latency:",
-                {
-                    "routing_s": round(float(result.get("router_latency_s", 0)), 2),
-                    "retrieval_s": round(float(result.get("retrieval_latency_s", 0)), 2),
-                    "generation_s": round(
-                        float(result.get("generation_latency_s", result.get("latency_s", 0))),
-                        2,
-                    ),
-                },
-            )
+        st.rerun()
 
     except Exception as exc:
         st.error(
