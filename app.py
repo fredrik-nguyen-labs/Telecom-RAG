@@ -118,8 +118,29 @@ DEFAULT_CHAT_QUESTION = (
     "Why might this measurement have this throughput, and which radio "
     "measurements are most relevant to investigate?"
 )
+
+SUGGESTED_QUESTION_PLACEHOLDER = "Choose a suggested question..."
+SUGGESTED_QUESTIONS = [
+    SUGGESTED_QUESTION_PLACEHOLDER,
+    "Why might this measurement have this throughput?",
+    "Which radio measurements should I investigate first?",
+    "What stands out about this measurement?",
+    "Does the SINR look consistent with the throughput?",
+    "How do RSRP, SINR, CQI and MCS relate to each other?",
+    "What could cause low throughput even when signal strength looks reasonable?",
+]
+
 if "chat_draft" not in st.session_state:
     st.session_state.chat_draft = DEFAULT_CHAT_QUESTION
+if "suggested_question" not in st.session_state:
+    st.session_state.suggested_question = SUGGESTED_QUESTION_PLACEHOLDER
+
+
+def _apply_suggested_question() -> None:
+    """Copy the selected starter question into the editable message box."""
+    selected = str(st.session_state.get("suggested_question", "")).strip()
+    if selected and selected != SUGGESTED_QUESTION_PLACEHOLDER:
+        st.session_state.chat_draft = selected
 
 
 def _queue_chat_message() -> None:
@@ -149,9 +170,21 @@ st.caption(
 st.markdown(
     "🔗 [GitHub repository](https://github.com/fredrik-nguyen-labs/Telecom-RAG)"
 )
-st.caption(
-    "Select a measurement or enter your own KPIs, ask a question, and review "
-    "the data-backed diagnosis and cited evidence."
+st.info(
+    """
+    **How to use the demo**
+
+    1. **Choose the KPI context.** Start with the prefilled example values, edit them to
+       match your own measurement, or switch to a real Ericsson/AERPAW dataset sample.
+    2. **Ask a question.** Use the suggested-question dropdown for an easy starting point,
+       or write your own question in the message box.
+    3. **Review the grounded answer.** The assistant uses the KPI context when relevant
+       and retrieves telecom standards/technical documentation for source-backed claims.
+    4. **Keep the conversation going.** Ask follow-up questions naturally; recent turns
+       remain in context while the selected KPI measurement stays available.
+
+    The cited sources under each answer let you inspect the retrieved technical evidence.
+    """
 )
 
 
@@ -505,13 +538,24 @@ with chat_header_cols[1]:
         if st.button("New chat", use_container_width=True):
             st.session_state.chat_messages = []
             st.session_state.chat_draft = DEFAULT_CHAT_QUESTION
+            st.session_state.suggested_question = SUGGESTED_QUESTION_PLACEHOLDER
             st.session_state.pop("pending_chat_question", None)
             st.rerun()
+
+st.selectbox(
+    "Suggested questions",
+    SUGGESTED_QUESTIONS,
+    key="suggested_question",
+    on_change=_apply_suggested_question,
+    help="Pick one to copy it into the message box below, then edit it if you want.",
+)
 
 chat_panel = st.container(height=400)
 with chat_panel:
     if not st.session_state.chat_messages:
-        st.caption("Your conversation will appear here.")
+        st.caption(
+            "Your conversation will appear here after you send the first question."
+        )
     for message in st.session_state.chat_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -520,6 +564,10 @@ with chat_panel:
                     message["content"],
                     message.get("sources", []),
                 )
+
+# Reserved full-width status area so loading appears directly below the chat window
+# instead of lower on the page after the KPI/question columns.
+workflow_status = st.empty()
 
 st.divider()
 
@@ -714,14 +762,18 @@ if run:
                 f"Current question:\n{cleaned_question}"
             )
 
-        with st.spinner("Running the LangGraph workflow..."):
-            result = graph.invoke(
-                {
-                    "question": graph_question,
-                    "use_rag": True,
-                    "observation": observation,
-                }
-            )
+        with workflow_status.container():
+            with st.spinner(
+                "Analyzing the KPI context and retrieving relevant telecom sources..."
+            ):
+                result = graph.invoke(
+                    {
+                        "question": graph_question,
+                        "use_rag": True,
+                        "observation": observation,
+                    }
+                )
+        workflow_status.empty()
 
         answer_text = str(result.get("answer", "")).strip()
         if not answer_text:
@@ -749,6 +801,7 @@ if run:
         st.rerun()
 
     except Exception as exc:
+        workflow_status.empty()
         st.error(
             "The request failed. Check the technical error below for a Cloudflare, "
             "Supabase, retrieval, or model-response issue."
