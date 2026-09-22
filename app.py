@@ -68,11 +68,11 @@ for secret_name in (
         os.environ[secret_name] = secret_value
 
 
-@st.cache_resource(show_spinner="Preparing local demo assets...")
+@st.cache_resource(show_spinner="Preparing local assets...")
 def cached_bootstrap():
-    from telecom_rag.bootstrap import ensure_demo_assets
+    from telecom_rag.bootstrap import ensure_local_assets
 
-    return ensure_demo_assets()
+    return ensure_local_assets()
 
 
 @st.cache_resource(show_spinner="Loading retrieval backend...")
@@ -506,7 +506,7 @@ def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
 
 
 with st.sidebar:
-    st.header("Demo controls")
+    st.header("Controls")
 
     if cloudflare_available:
         provider = "cloudflare"
@@ -563,7 +563,7 @@ with st.sidebar:
     )
 
     st.divider()
-    st.subheader("Public-demo guardrails")
+    st.subheader("Usage limits")
     st.metric("Request units left in this session", remaining_units)
     st.caption(
         "One answer = 1 unit. Enabling the baseline comparison uses 2 units. "
@@ -651,7 +651,7 @@ with left:
         ["Dataset sample", "Enter your own KPIs"],
         horizontal=True,
         help=(
-            "Use a real Ericsson/AERPAW row for a reproducible demo, or enter your own "
+            "Use a real Ericsson/AERPAW row for a reproducible example, or enter your own "
             "radio KPIs and compare them with the dataset distribution."
         ),
     )
@@ -780,14 +780,14 @@ with right:
         value=default_q,
         height=130,
         max_chars=MAX_QUESTION_CHARS,
-        help=f"Maximum {MAX_QUESTION_CHARS} characters in the public demo.",
+        help=f"Maximum {MAX_QUESTION_CHARS} characters per request.",
     )
 
     units_needed = 2 if compare and use_rag else 1
     run_disabled = units_needed > remaining_units
 
     if run_disabled:
-        st.warning("This session has reached its demo request limit.")
+        st.warning("This session has reached its request limit.")
 
     run = st.button(
         "Analyze",
@@ -808,7 +808,7 @@ if run:
         st.stop()
 
     # Reserve units before the call. A failed provider request can still consume
-    # resources, so the public-demo counter is conservative.
+    # resources, so the session counter is conservative.
     st.session_state.request_units_used += units_needed
 
     try:
