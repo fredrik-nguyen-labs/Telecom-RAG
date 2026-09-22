@@ -284,14 +284,37 @@ def _custom_observation_from_inputs(values: dict[str, str]) -> dict | None:
     return observation if entered else None
 
 
-def _citation_order(answer: str) -> list[str]:
-    """Return cited source IDs in first-use order."""
+def _citation_claims(answer: str) -> tuple[list[str], dict[str, list[str]]]:
+    """Map each inline citation to the answer claim it supports."""
     order: list[str] = []
-    for number in re.findall(r"\[S(\d+)\]", answer):
-        citation_id = f"S{number}"
-        if citation_id not in order:
-            order.append(citation_id)
-    return order
+    claims: dict[str, list[str]] = {}
+    spans = [
+        span.strip()
+        for span in re.split(r"(?<=[.!?])\s+|\n+", answer)
+        if span.strip()
+    ]
+    for span in spans:
+        citation_ids = [f"S{n}" for n in re.findall(r"\[S(\d+)\]", span)]
+        if not citation_ids:
+            continue
+        claim = re.sub(r"\s*\[S\d+\]", "", span).strip()
+        for citation_id in citation_ids:
+            if citation_id not in order:
+                order.append(citation_id)
+            claims.setdefault(citation_id, [])
+            if claim and claim not in claims[citation_id]:
+                claims[citation_id].append(claim)
+    return order, claims
+
+
+def _source_link(source: dict) -> str | None:
+    url = str(source.get("url") or "").strip()
+    if not url:
+        return None
+    page = source.get("page")
+    if page and url.lower().endswith(".pdf"):
+        return f"{url}#page={page}"
+    return url
 
 
 def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
@@ -299,7 +322,7 @@ def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
     if not sources:
         return
 
-    citation_order = _citation_order(answer)
+    citation_order, claims = _citation_claims(answer)
     by_id = {source.get("citation"): source for source in sources}
 
     if citation_order:
@@ -332,6 +355,21 @@ def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
             label += f" — {location}"
 
         with st.expander(label, expanded=False):
+            cited_claims = claims.get(citation_id, [])
+            if cited_claims:
+                st.markdown("**Claim supported by this source**")
+                for claim in cited_claims:
+                    st.markdown(f"- {claim}")
+
+            st.markdown("**Source**")
+            source_url = _source_link(source)
+            if source_url:
+                st.markdown(f"[{title}]({source_url})")
+                st.caption(source_url)
+            else:
+                st.write(title)
+
+            st.markdown("**Retrieved evidence**")
             st.write(source.get("content") or source.get("excerpt") or "")
 
 
