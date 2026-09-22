@@ -48,7 +48,7 @@ PowerShell:
 $env:CLOUDFLARE_ACCOUNT_ID="..."
 $env:CLOUDFLARE_API_TOKEN="..."
 $env:CLOUDFLARE_GENERATOR_MODEL="@cf/google/gemma-4-26b-a4b-it"
-export CLOUDFLARE_ROUTER_MODEL="@cf/zai-org/glm-4.7-flash"
+$env:CLOUDFLARE_ROUTER_MODEL="@cf/zai-org/glm-4.7-flash"
 $env:CLOUDFLARE_EMBEDDING_MODEL="@cf/baai/bge-small-en-v1.5"
 $env:CLOUDFLARE_RERANKER_MODEL="@cf/baai/bge-reranker-base"
 $env:USE_CLOUDFLARE_RETRIEVAL="true"
