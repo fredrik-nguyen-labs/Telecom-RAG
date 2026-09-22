@@ -1,334 +1,106 @@
-# Supabase setup for Telecom-RAG
+# Supabase backend
 
-Supabase is the **recommended hosted persistence/vector backend** for the deployed app.
+Supabase is the hosted persistence and retrieval backend for the public Streamlit demo.
 
-The project keeps the local FAISS/BM25 path for notebooks and offline development, while the deployed path can use:
+The local/notebook path does not require Supabase.
+
+## Architecture
 
 ```text
-Streamlit
-   |
-   | BGE query embedding
-   v
+Cloudflare BGE query embedding
+          |
+          v
 Supabase Postgres
-├── kpi_observations
-└── document_chunks
-       ├── pgvector / HNSW dense search
-       └── Postgres full-text search
-              |
-              v
-       reciprocal-rank fusion
-              |
-              v
-     local cross-encoder reranker
-              |
-              v
-             LLM
+├── KPI observations
+├── pgvector / HNSW dense retrieval
+└── PostgreSQL full-text retrieval
+          |
+          v
+reciprocal-rank fusion
+          |
+          v
+Cloudflare BGE reranker
 ```
 
-The Supabase SQL schema assumes the default embedding model:
+The schema uses `BAAI/bge-small-en-v1.5` embeddings with **384 dimensions**.
 
-```text
-BAAI/bge-small-en-v1.5
-dimension = 384
-```
+## 1. Create a project
 
-If you change to an embedding model with a different dimension, update the vector dimensions in the migration.
-
----
-
-## 1. Create a Supabase project
-
-Create a project at:
-
-https://supabase.com/dashboard
-
-After the project is ready, open its **Connect** dialog or **Settings -> API Keys**.
-
-You need:
+Create a Supabase project and obtain:
 
 - Project URL
-- Publishable key: `sb_publishable_...`
-- Secret key: `sb_secret_...`
+- publishable key
+- secret key
 
-The publishable key is used by the deployed Streamlit app.
+The public Streamlit app uses only the publishable key.
 
-The secret key is used **only** from your trusted local/admin environment to seed the database. Never commit it and do not put it in a public client.
+The secret key is used only from a trusted environment when seeding the database.
 
-Legacy `anon` / `service_role` keys are also accepted by the code, but the current Supabase publishable/secret keys are preferred.
+## 2. Apply the migration
 
----
-
-## 2. Apply the database migration
-
-Open the Supabase **SQL Editor**.
-
-Copy the complete contents of:
+Open the Supabase SQL Editor and run:
 
 ```text
 supabase/migrations/20260921130000_init_telecom_rag.sql
 ```
 
-into the editor and run it.
+It creates:
 
-The migration creates:
+- `document_chunks`
+- `kpi_observations`
+- a pgvector HNSW index
+- a PostgreSQL full-text GIN index
+- constrained dense/hybrid retrieval RPCs
+- a status RPC
+- Row Level Security policies
 
-### `document_chunks`
+## 3. Seed the database
 
-Stores:
-
-- chunk ID
-- source/document metadata
-- page and section
-- chunk content
-- BGE embedding `vector(384)`
-- embedding/chunking version
-- generated Postgres full-text-search vector
-
-Indexes:
-
-- HNSW cosine index for pgvector
-- GIN full-text index
-- embedding/chunk-version index
-
-### `kpi_observations`
-
-Stores the processed Ericsson/AERPAW observation table, including:
-
-- timestamp/orientation/location
-- LTE/NR RSRP
-- LTE/NR SINR
-- CQI/MCS/RI
-- throughput
-- anomaly score/flag
-- full row payload
-
-### RPC functions
-
-The migration also creates:
-
-```text
-match_document_chunks(...)
-hybrid_search_document_chunks(...)
-telecom_rag_status(...)
-```
-
-The hybrid function combines:
-
-```text
-pgvector semantic ranking
-        +
-Postgres full-text ranking
-        |
-        v
- reciprocal-rank fusion
-```
-
-The Python application then applies the existing cross-encoder reranker.
-
----
-
-## 3. Configure your local admin environment
-
-Create a local `.env` or export these variables.
-
-### Linux/macOS
+Set admin credentials in a trusted shell:
 
 ```bash
 export SUPABASE_URL="https://YOUR_PROJECT_REF.supabase.co"
-export SUPABASE_SECRET_KEY="sb_secret_..."
+export SUPABASE_SECRET_KEY="..."
 ```
 
-### Windows PowerShell
-
-```powershell
-$env:SUPABASE_URL="https://YOUR_PROJECT_REF.supabase.co"
-$env:SUPABASE_SECRET_KEY="sb_secret_..."
-```
-
-Do **not** commit the secret key.
-
-The repository's `.gitignore` already ignores `.env`.
-
----
-
-## 4. Install dependencies
+Then:
 
 ```bash
-python -m pip install -r requirements-dev.txt
+uv sync
+uv run python scripts/sync_supabase.py
 ```
 
-The pinned runtime dependency includes:
-
-```text
-supabase==2.31.0
-```
-
----
-
-## 5. Seed Supabase
-
-From the repository root:
+Useful partial syncs:
 
 ```bash
-python scripts/sync_supabase.py
+uv run python scripts/sync_supabase.py --skip-kpis
+uv run python scripts/sync_supabase.py --skip-docs
 ```
 
-The command automatically:
+Rerun the sync whenever the corpus, chunking/embedding configuration, or KPI table changes.
 
-1. prepares/downloads the document corpus if needed,
-2. chunks the documents,
-3. creates BGE embeddings,
-4. upserts all document chunks/embeddings into Supabase,
-5. prepares the processed KPI table if needed,
-6. upserts the KPI observations,
-7. prints the resulting database status.
+## 4. Test the hosted backend locally
 
-Typical final output looks like:
-
-```text
-Supabase status:
-  document_chunks_total: ...
-  document_chunks_current: ...
-  kpi_observations: ...
-  embedding_model: BAAI/bge-small-en-v1.5
-  chunking_version: section-aware-v2
-```
-
-You can sync only one side:
-
-```bash
-python scripts/sync_supabase.py --skip-kpis
-python scripts/sync_supabase.py --skip-docs
-```
-
-Rerun the sync command whenever the corpus, chunking, embeddings, or KPI table changes.
-
----
-
-## 6. Test Supabase locally
-
-For the application runtime, set the **publishable** key:
-
-### Linux/macOS
+Use the low-privilege runtime key:
 
 ```bash
 export USE_SUPABASE=true
 export SUPABASE_URL="https://YOUR_PROJECT_REF.supabase.co"
-export SUPABASE_PUBLISHABLE_KEY="sb_publishable_..."
-streamlit run app.py
+export SUPABASE_PUBLISHABLE_KEY="..."
+uv run streamlit run app.py
 ```
 
-### Windows PowerShell
-
-```powershell
-$env:USE_SUPABASE="true"
-$env:SUPABASE_URL="https://YOUR_PROJECT_REF.supabase.co"
-$env:SUPABASE_PUBLISHABLE_KEY="sb_publishable_..."
-streamlit run app.py
-```
-
-The Streamlit sidebar should show:
-
-```text
-Storage: Supabase Postgres + pgvector
-Current document chunks: ...
-KPI observations: ...
-Vector index: ✅ HNSW
-```
-
-If Supabase is configured but not seeded or temporarily unavailable, the app falls back to the local reproducible FAISS/BM25 backend.
-
----
-
-## 7. Configure Streamlit Community Cloud
-
-In Streamlit **App settings -> Secrets**, add:
-
-```toml
-OPENAI_API_KEY = "..."
-OPENAI_MODEL = "gpt-5.6-luna"
-
-USE_SUPABASE = "true"
-SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
-SUPABASE_PUBLISHABLE_KEY = "sb_publishable_..."
-```
-
-Do **not** add `SUPABASE_SECRET_KEY` to the public Streamlit app.
-
-The deployed application only needs read/search access.
-
----
+For the full hosted retrieval path, also configure Cloudflare as described in
+[CLOUDFLARE.md](CLOUDFLARE.md).
 
 ## Security model
 
-The SQL migration enables Row Level Security.
-
-The publishable-key application can:
+The public runtime can:
 
 - read the public KPI observations,
-- call the constrained dense/hybrid search RPCs,
-- call the status RPC.
+- call constrained document-search RPCs,
+- call the backend status RPC.
 
-It cannot directly read the raw `document_chunks` table through the Data API.
+It cannot directly read the raw `document_chunks` table through the public Data API.
 
-The secret key maps to the elevated `service_role` and is used only by the trusted sync script.
-
----
-
-## Local vs hosted retrieval
-
-### Local/notebook
-
-```text
-BGE
- + FAISS
- + rank-bm25
- + RRF
- + cross-encoder
-```
-
-### Hosted/Supabase
-
-```text
-BGE
- + pgvector/HNSW
- + Postgres full-text search
- + RRF
- + cross-encoder
-```
-
-The LangGraph and generation layers are unchanged.
-
-This gives the project both:
-
-- a simple reproducible ML/RAG baseline,
-- a persistent production-style hosted architecture.
-
-
----
-
-## Cloudflare usage meter migration
-
-The Streamlit app can persist app-side Cloudflare token usage in Supabase and show an
-**estimated Workers AI free quota remaining today**.
-
-After pulling the latest repository version, also run this migration in the Supabase SQL
-Editor:
-
-```text
-supabase/migrations/20260922021500_cloudflare_usage.sql
-```
-
-This creates a small `llm_usage` table and two constrained RPCs:
-
-```text
-record_cloudflare_usage(...)
-cloudflare_usage_today()
-```
-
-Only model name and input/output token counts are stored. Prompts and answers are not
-stored by this meter.
-
-The estimate uses Cloudflare's published Neuron conversion for the configured model.
-It measures calls made through Telecom-RAG, so the Cloudflare Workers AI dashboard remains
-the authoritative account-wide quota source if the same Cloudflare account is used elsewhere.
+Do not expose `SUPABASE_SECRET_KEY` in Streamlit secrets or client-side code.
