@@ -287,21 +287,67 @@ Use the retrieved technical context as the factual knowledge source for technica
 If KPI context is provided, treat it as measured evidence, but do not invent universal
 thresholds that are not supported by a retrieved source.
 
-Answer the user's question directly first. Then explain the most relevant evidence.
-Distinguish:
-1. measured KPI facts,
-2. dataset-relative statistics,
-3. source-supported technical interpretation,
-4. hypotheses that would need additional evidence.
+Return the answer using these Markdown sections:
+
+## Answer
+A direct answer to the user's actual question.
+
+If KPI context is present, also include:
+## Measured evidence
+Only measured KPI values and dataset-relative statistics that matter to the question.
+
+If technical explanation adds value, include:
+## Technical interpretation
+Source-supported explanation of the relevant mechanism.
+
+Only when KPI context is present AND a causal explanation is uncertain, include:
+## Hypotheses
+Clearly qualified possible explanations and what additional evidence would be needed.
+Do not add a hypotheses section to generic documentation questions.
+
+Do not mention the selected observation at all when KPI context is absent.
+Do not repeat irrelevant KPI values merely because they are available.
 
 Cite source-supported claims using [S1], [S2], etc. Never cite a source that does not
 support the statement. Prefer the most relevant evidence over mentioning every retrieved
 chunk. If the retrieved context is insufficient, say what is missing rather than guessing.
-Keep the answer concise and technically useful."""
+Keep each section concise and technically useful."""
 
 BASELINE_SYSTEM_PROMPT = """You are a telecom network analysis assistant.
 Answer from your pretrained knowledge only. If you are unsure, say so. Do not invent
 citations or pretend you consulted documents. Keep the answer concise and technical."""
+
+
+_SECTION_RE = re.compile(
+    r"(?im)^##\s+(Answer|Measured evidence|Technical interpretation|Hypotheses)\s*$"
+)
+
+
+def parse_answer_sections(text: str) -> dict[str, str]:
+    """Parse the model's stable Markdown section contract for card-based rendering."""
+    matches = list(_SECTION_RE.finditer(text))
+    if not matches:
+        return {"answer": text.strip()} if text.strip() else {}
+
+    key_map = {
+        "answer": "answer",
+        "measured evidence": "measured_evidence",
+        "technical interpretation": "technical_interpretation",
+        "hypotheses": "hypotheses",
+    }
+    sections: dict[str, str] = {}
+    for idx, match in enumerate(matches):
+        start = match.end()
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
+        content = text[start:end].strip()
+        if content:
+            sections[key_map[match.group(1).lower()]] = content
+
+    # If the model accidentally emitted prose before the first heading, keep it visible.
+    preamble = text[: matches[0].start()].strip()
+    if preamble and "answer" not in sections:
+        sections["answer"] = preamble
+    return sections
 
 
 def _extract_token_usage(response: Any) -> dict[str, int]:
@@ -349,8 +395,10 @@ def answer_with_rag(
         [SystemMessage(content=RAG_SYSTEM_PROMPT), HumanMessage(content=user)]
     )
     latency = time.perf_counter() - start
+    answer_text = str(response.content)
     return {
-        "answer": str(response.content),
+        "answer": answer_text,
+        "answer_sections": parse_answer_sections(answer_text),
         "sources": sources,
         "latency_s": latency,
         "llm_usage": _extract_token_usage(response),
