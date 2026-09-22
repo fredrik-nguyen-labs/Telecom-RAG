@@ -43,6 +43,15 @@ CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN", "")
 CLOUDFLARE_MODEL = os.getenv(
     "CLOUDFLARE_MODEL", "@cf/meta/llama-3.2-3b-instruct"
 )
+CLOUDFLARE_EMBEDDING_MODEL = os.getenv(
+    "CLOUDFLARE_EMBEDDING_MODEL", "@cf/baai/bge-small-en-v1.5"
+)
+CLOUDFLARE_RERANKER_MODEL = os.getenv(
+    "CLOUDFLARE_RERANKER_MODEL", "@cf/baai/bge-reranker-base"
+)
+USE_CLOUDFLARE_RETRIEVAL = os.getenv(
+    "USE_CLOUDFLARE_RETRIEVAL", "true"
+).lower() in {"1", "true", "yes", "on"}
 
 # Optional paid fallback.
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
