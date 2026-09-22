@@ -303,3 +303,32 @@ This gives the project both:
 
 - a simple reproducible ML/RAG baseline,
 - a persistent production-style hosted architecture.
+
+
+---
+
+## Cloudflare usage meter migration
+
+The Streamlit app can persist app-side Cloudflare token usage in Supabase and show an
+**estimated Workers AI free quota remaining today**.
+
+After pulling the latest repository version, also run this migration in the Supabase SQL
+Editor:
+
+```text
+supabase/migrations/20260922021500_cloudflare_usage.sql
+```
+
+This creates a small `llm_usage` table and two constrained RPCs:
+
+```text
+record_cloudflare_usage(...)
+cloudflare_usage_today()
+```
+
+Only model name and input/output token counts are stored. Prompts and answers are not
+stored by this meter.
+
+The estimate uses Cloudflare's published Neuron conversion for the configured model.
+It measures calls made through Telecom-RAG, so the Cloudflare Workers AI dashboard remains
+the authoritative account-wide quota source if the same Cloudflare account is used elsewhere.
