@@ -66,4 +66,4 @@ Run the evaluation notebook to regenerate the detailed CSVs and executed noteboo
 uv run jupyter lab
 ```
 
-Open `notebooks/02_rag_demo_and_evaluation.ipynb` and run the evaluation cells.
+Open `notebooks/02_rag_evaluation.ipynb` and run the evaluation cells.
