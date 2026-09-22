@@ -925,6 +925,7 @@ if run:
         )
         st.caption(
             "Latency breakdown: "
+            f"routing {result.get('router_latency_s', 0):.2f}s · "
             f"retrieval {result.get('retrieval_latency_s', 0):.2f}s · "
             f"generation {result.get('generation_latency_s', result.get('latency_s', 0)):.2f}s"
         )
