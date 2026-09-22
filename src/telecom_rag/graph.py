@@ -9,7 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 
 from .kpi import analyze_observation
-from .rag import answer_with_rag, answer_without_rag, extract_token_usage
+from .rag import answer_with_rag, answer_without_rag
 from .retrieval import RetrieverProtocol, build_retrieval_query
 
 
@@ -29,11 +29,9 @@ class AppState(TypedDict, total=False):
     retrieval_latency_s: float
     generation_latency_s: float
     total_latency_s: float
-    llm_usage: dict[str, int]
     route: str
     route_reason: str
     router_latency_s: float
-    router_usage: dict[str, int]
 
 
 ROUTER_SYSTEM_PROMPT = """You are the semantic intent router for a telecom analysis app.
@@ -129,7 +127,6 @@ def build_graph(
                 "route": "docs-only",
                 "route_reason": "no KPI observation is available",
                 "router_latency_s": 0.0,
-                "router_usage": {},
             }
 
         user_prompt = (
@@ -151,21 +148,18 @@ def build_graph(
                     "route": "docs-only",
                     "route_reason": "semantic router returned an invalid response",
                     "router_latency_s": router_latency_s,
-                    "router_usage": extract_token_usage(response),
                 }
             route, reason = parsed
             return {
                 "route": route,
                 "route_reason": reason,
                 "router_latency_s": router_latency_s,
-                "router_usage": extract_token_usage(response),
             }
         except Exception:
             return {
                 "route": "docs-only",
                 "route_reason": "semantic router unavailable; safe docs-only fallback",
                 "router_latency_s": time.perf_counter() - started,
-                "router_usage": {},
             }
 
     def route_edge(state: AppState) -> Literal["analyze_kpi", "retrieve"]:
@@ -231,16 +225,6 @@ def build_graph(
             if clean_answer:
                 result["answer"] = clean_answer
 
-        generation_usage = result.get("llm_usage") or {}
-        router_usage = state.get("router_usage") or {}
-        result["llm_usage"] = {
-            "input_tokens": int(generation_usage.get("input_tokens", 0))
-            + int(router_usage.get("input_tokens", 0)),
-            "output_tokens": int(generation_usage.get("output_tokens", 0))
-            + int(router_usage.get("output_tokens", 0)),
-            "total_tokens": int(generation_usage.get("total_tokens", 0))
-            + int(router_usage.get("total_tokens", 0)),
-        }
         result["router_latency_s"] = router_latency_s
         result["generation_latency_s"] = generation_latency_s
         result["retrieval_latency_s"] = retrieval_latency_s
