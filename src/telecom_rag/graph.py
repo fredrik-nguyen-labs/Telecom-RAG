@@ -56,6 +56,13 @@ DIAGNOSTIC_REFERENCE_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
+KPI_DIAGNOSTIC_INTENT_RE = re.compile(
+    r"\b(?:why\s+(?:is|are|might|could)|what\s+(?:stands\s+out|is\s+unusual)|"
+    r"diagnose|troubleshoot|investigate)\b.*"
+    r"\b(?:throughput|rsrp|rsrq|sinr|cqi|mcs|kpis?|values?|performance)\b",
+    flags=re.IGNORECASE,
+)
+
 
 def classify_question_route(question: str, has_observation: bool) -> tuple[str, str]:
     """Return the deterministic route and a human-readable reason.
@@ -77,7 +84,10 @@ def classify_question_route(question: str, has_observation: bool) -> tuple[str, 
     if DIAGNOSTIC_REFERENCE_RE.search(q):
         return "kpi+docs", "question explicitly asks to diagnose the selected measurement"
 
-    return "docs-only", "no explicit reference to the selected measurement"
+    if KPI_DIAGNOSTIC_INTENT_RE.search(q):
+        return "kpi+docs", "diagnostic KPI question with observation values available"
+
+    return "docs-only", "no diagnostic reference to the available observation"
 
 
 def question_needs_kpi(question: str, has_observation: bool) -> bool:
