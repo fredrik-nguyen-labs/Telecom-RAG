@@ -16,7 +16,7 @@ The project combines:
 - the same LLM **with vs without RAG** evaluation,
 - a Streamlit demo.
 
-For local setup and the exact run order, see **[RUNNING.md](RUNNING.md)**. For Supabase setup, see **[SUPABASE.md](SUPABASE.md)**. For the public Streamlit deployment, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+For local setup and the exact run order, see **[RUNNING.md](RUNNING.md)**. For Supabase setup, see **[SUPABASE.md](SUPABASE.md)**. For the free hosted LLM, see **[CLOUDFLARE.md](CLOUDFLARE.md)**. For the public Streamlit deployment, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
 The central idea is deliberately simple:
 
@@ -127,16 +127,18 @@ ollama serve
 
 No LLM API key is needed for local use.
 
-### Optional hosted LLM
+### Hosted LLM
 
-For Streamlit Community Cloud or another hosted deployment, set:
+The recommended public deployment uses **Cloudflare Workers AI** with Llama 3.2 3B:
 
 ```text
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-5.6-luna
+CLOUDFLARE_ACCOUNT_ID=...
+CLOUDFLARE_API_TOKEN=...
+CLOUDFLARE_MODEL=@cf/meta/llama-3.2-3b-instruct
 ```
 
-The code keeps the LLM provider behind the same LangChain interface, so the RAG pipeline does not change.
+OpenAI remains an optional fallback, but it is not required for the public demo. The
+provider stays behind the same LangChain interface, so the RAG pipeline does not change.
 
 ## 4. Run the notebooks
 
@@ -210,11 +212,13 @@ The app lets you:
 
 ### Streamlit Community Cloud
 
-Ollama runs on your own machine, so a normal Streamlit Community Cloud deployment should use the hosted provider instead. Add the following in Streamlit **Secrets**:
+Ollama runs on your own machine, so Streamlit Community Cloud should use Cloudflare
+Workers AI instead. Add:
 
 ```toml
-OPENAI_API_KEY = "..."
-OPENAI_MODEL = "gpt-5.6-luna"
+CLOUDFLARE_ACCOUNT_ID = "..."
+CLOUDFLARE_API_TOKEN = "..."
+CLOUDFLARE_MODEL = "@cf/meta/llama-3.2-3b-instruct"
 ```
 
 For the recommended persistent deployment, also configure Supabase:
@@ -284,6 +288,7 @@ Telecom-RAG/
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── SUPABASE.md
+├── CLOUDFLARE.md
 ├── data/
 │   ├── README.md
 │   ├── raw/                 # downloaded, ignored by Git
@@ -330,7 +335,7 @@ BGE/FAISS + BM25
        ↓
 cross-encoder
        ↓
-      LLM
+Cloudflare Workers AI / local Ollama
 ```
 
 Hosted/deployed:
