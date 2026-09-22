@@ -1,15 +1,16 @@
-# Streamlit Community Cloud deployment
+# Deployment
 
-The application is designed for a lightweight hosted runtime:
+The public application is designed for a lightweight Streamlit Community Cloud runtime.
+
+## Hosted architecture
 
 ```text
 Streamlit
    |
-   +--> Supabase KPI rows
+   +--> Supabase KPI observations
    |
    +--> Cloudflare BGE query embedding
             |
-            v
        Supabase hybrid retrieval
        pgvector + PostgreSQL FTS
             |
@@ -17,29 +18,27 @@ Streamlit
             |
        Cloudflare BGE reranker
             |
-            v
-       Cloudflare LLM
+      Cloudflare GLM router
+            |
+      Cloudflare Gemma answer
 ```
 
-No local PyTorch, SentenceTransformers, FAISS or scikit-learn model is loaded in the
-hosted Streamlit process.
+The hosted process does not load local PyTorch, SentenceTransformers, FAISS or
+scikit-learn models.
 
 ## 1. Prepare Supabase
 
 Follow [SUPABASE.md](SUPABASE.md):
 
-1. create the project,
-2. run the SQL migration,
-3. seed documents/KPI rows with `scripts/sync_supabase.py`.
+1. create the Supabase project;
+2. apply `supabase/migrations/20260921130000_init_telecom_rag.sql`;
+3. seed KPI rows and document chunks with `scripts/sync_supabase.py`.
 
 ## 2. Prepare Cloudflare Workers AI
 
-Follow [CLOUDFLARE.md](CLOUDFLARE.md) and obtain:
+Follow [CLOUDFLARE.md](CLOUDFLARE.md) and create a Workers AI API token plus Account ID.
 
-- Account ID
-- Workers AI API token
-
-## 3. Create the Streamlit app
+## 3. Configure Streamlit Community Cloud
 
 Use:
 
@@ -50,11 +49,11 @@ Main file:   deploy/app.py
 Python:      3.12
 ```
 
-The `deploy/app.py` entrypoint sets the lightweight hosted mode and runs the root app.
+`deploy/app.py` enables hosted-lightweight mode and runs the root `app.py`.
 
-## 4. Add secrets
+## 4. Add Streamlit secrets
 
-In **App settings → Secrets**:
+In **App settings -> Secrets**:
 
 ```toml
 CLOUDFLARE_ACCOUNT_ID = "..."
@@ -70,49 +69,60 @@ SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
 SUPABASE_PUBLISHABLE_KEY = "..."
 ```
 
-Never put the Supabase secret/admin key in the public deployment.
+Never put `SUPABASE_SECRET_KEY` in the public Streamlit deployment.
 
-## 5. Verify
+## 5. Verify the UI
 
-The sidebar should show:
+The current public layout contains:
+
+1. a highlighted usage guide;
+2. a full-width scrollable conversation history;
+3. KPI controls and the question composer in a two-column layout;
+4. suggested questions above the message box;
+5. a highlighted analysis/loading status directly below the conversation;
+6. concise answers with expandable cited source chunks.
+
+Test a docs-only question:
 
 ```text
-Hosted retrieval: Supabase + Cloudflare
-Dense retrieval:   pgvector HNSW
-Lexical retrieval: PostgreSQL FTS
-Fusion:            RRF
-Reranker:          Cloudflare BGE
+What is the difference between RSRP and SINR?
 ```
 
-Test both routes:
+Then test an observation-aware question:
 
 ```text
-What does RSRP measure?
+Why might this measurement have this throughput?
 ```
 
-should use the technical-doc route, while an observation-aware diagnostic question should
-use KPI analysis plus documents.
+The first should not require KPI analysis merely because values are selected; the second
+should route through KPI + docs.
 
-## 6. Updates
+## 6. Conversation behavior
 
-Streamlit Community Cloud watches the configured branch. Normal pushes to `main` should
-update the app automatically.
+Chat memory is session-only. **New chat** clears the conversation and restores the default
+starter question. Conversation history is not stored in Supabase and is not available in a
+new Streamlit/browser session.
 
-If you change the corpus, chunking, embedding model or KPI dataset, also rerun:
+## 7. Updates and data synchronization
+
+Streamlit Community Cloud watches `main`, so normal pushes redeploy automatically.
+
+When the corpus, chunking configuration, embedding model or KPI dataset changes, rerun:
 
 ```bash
 uv run python scripts/sync_supabase.py
 ```
 
-so Supabase matches the new repository configuration.
+so the hosted database matches the repository configuration.
 
-## Hosted failure behavior
+## Failure behavior
 
-The lightweight hosted deployment requires a working seeded Supabase backend.
+- Hosted-lightweight mode requires a working seeded Supabase backend.
+- Router failures fall back to docs-only.
+- Cloudflare reranker failures fall back to the fused RRF ranking.
+- Cloudflare generation/provider failures are displayed rather than silently changing the
+  architecture.
+- The direct Workers AI client reports empty-completion finish reason and usage metadata in
+  the technical exception.
 
-If Cloudflare reranking alone is slow/unavailable, retrieval falls back to the fused RRF
-ranking. Provider/network failures outside that optional rerank step are shown as request
-errors rather than silently changing the architecture.
-
-
-The interactive application uses the standard Cloudflare OpenAI-compatible chat request shape used by the last known-good pre-cleanup deployment.
+The public runtime intentionally uses only the low-privilege Supabase publishable key.
