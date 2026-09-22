@@ -1015,3 +1015,9 @@ st.caption(
     "statistics are relative to this measurement dataset, not universal telecom quality "
     "thresholds. Retrieved sources are shown so the technical explanation can be inspected."
 )
+
+st.markdown("---")
+st.markdown(
+    "View the project on [GitHub](https://github.com/fredrik-nguyen-labs/Telecom-RAG)."
+)
+
