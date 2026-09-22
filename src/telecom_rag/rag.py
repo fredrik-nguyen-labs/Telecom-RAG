@@ -27,6 +27,7 @@ from .config import (
     VECTOR_STORE_DIR,
 )
 from .retrieval import AdvancedRetriever
+from .source_catalog import source_info
 
 
 MANIFEST_NAME = "manifest.json"
@@ -368,7 +369,8 @@ def format_context(docs: list[Document]) -> tuple[str, list[dict[str, Any]]]:
         source = doc.metadata.get("source", "unknown")
         page = doc.metadata.get("page")
         section = doc.metadata.get("section")
-        source_id = doc.metadata.get("source_id", source)
+        source_id = str(doc.metadata.get("source_id", source))
+        catalog = source_info(source_id)
         page_text = f", page {page}" if page else ""
         section_text = f", section {section}" if section else ""
         blocks.append(
@@ -379,7 +381,8 @@ def format_context(docs: list[Document]) -> tuple[str, list[dict[str, Any]]]:
                 "citation": f"S{idx}",
                 "source": source,
                 "source_id": source_id,
-                "title": doc.metadata.get("title"),
+                "title": catalog.get("title") or doc.metadata.get("title"),
+                "url": doc.metadata.get("url") or catalog.get("url"),
                 "page": page,
                 "section": section,
                 "chunk_id": doc.metadata.get("chunk_id"),
@@ -399,8 +402,9 @@ Answer using the retrieved technical context. Give one compact response with no 
 headings. Usually use 1-3 short paragraphs or a few bullets only when bullets are clearer.
 Answer the question directly and include only the most relevant technical explanation.
 
-Cite source-supported technical claims inline with [S1], [S2], etc. Use only source IDs
-present in the retrieved context. If the context is insufficient, say so briefly rather
+Cite every source-supported technical claim inline with [S1], [S2], etc., placing the
+citation immediately after the sentence or claim it supports. Use only source IDs present
+in the retrieved context. If the context is insufficient, say so briefly rather
 than guessing. Avoid repetition, long background explanations, and unnecessary caveats."""
 
 
@@ -414,8 +418,9 @@ question. Do not dump percentiles, correlations, anomaly scores, nearest-neighbo
 statistics, or other diagnostics unless they are directly useful. Clearly distinguish
 observed evidence from possible explanations, but keep both in the same answer.
 
-Cite source-supported technical claims inline with [S1], [S2], etc. Use only source IDs
-present in the retrieved context. Do not cite the user's KPI values or deterministic
+Cite every source-supported technical claim inline with [S1], [S2], etc., placing the
+citation immediately after the sentence or claim it supports. Use only source IDs present
+in the retrieved context. Do not cite the user's KPI values or deterministic
 dataset statistics themselves. Do not invent universal thresholds. Avoid repetition and
 unnecessary background detail."""
 
