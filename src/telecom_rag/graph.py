@@ -25,6 +25,7 @@ class AppState(TypedDict, total=False):
     answer: str
     answer_sections: dict[str, str]
     sources: list[dict[str, Any]]
+    provider_metadata: dict[str, Any]
     latency_s: float
     retrieval_latency_s: float
     generation_latency_s: float
