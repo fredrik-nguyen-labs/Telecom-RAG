@@ -3,13 +3,10 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
-from typing import Iterable, Protocol
+from typing import Any, Iterable, Protocol
 
 import numpy as np
-from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
-from rank_bm25 import BM25Okapi
-from sentence_transformers import CrossEncoder
 
 from .config import (
     BM25_CANDIDATES,
@@ -57,19 +54,23 @@ class AdvancedRetriever:
 
     def __init__(
         self,
-        dense_store: FAISS,
+        dense_store: Any,
         chunks: list[Document],
         reranker_model: str = RERANKER_MODEL,
     ):
         self.dense_store = dense_store
         self.chunks = chunks
         self.reranker_model_name = reranker_model
+        from rank_bm25 import BM25Okapi
+
         self._tokenized = [tokenize_for_bm25(doc.page_content) for doc in chunks]
         self._bm25 = BM25Okapi(self._tokenized)
-        self._reranker: CrossEncoder | None = None
+        self._reranker: Any | None = None
 
-    def _get_reranker(self) -> CrossEncoder:
+    def _get_reranker(self) -> Any:
         if self._reranker is None:
+            from sentence_transformers import CrossEncoder
+
             self._reranker = CrossEncoder(self.reranker_model_name)
         return self._reranker
 
