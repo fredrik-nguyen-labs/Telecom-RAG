@@ -576,8 +576,11 @@ with st.sidebar:
         ["reranked", "hybrid", "dense"],
         index=0,
         help=(
-            "Local: BGE/FAISS + BM25 + RRF. Supabase: pgvector + Postgres FTS + RRF. "
-            "Reranked mode applies the same cross-encoder after either backend."
+            "Hosted: Cloudflare BGE query embedding → Supabase pgvector dense search + "
+            "PostgreSQL full-text search → reciprocal-rank fusion (RRF). Reranked mode "
+            "adds the Cloudflare BGE reranker and falls back to fused RRF results if the "
+            "reranker is unavailable. Local/notebook: BGE/FAISS + BM25 + RRF + local "
+            "cross-encoder reranking."
         ),
     )
     compare = st.toggle(
@@ -610,7 +613,7 @@ with st.sidebar:
     st.divider()
     st.subheader("Project state")
     if using_supabase:
-        st.success("Storage: Supabase Postgres + pgvector")
+        st.success("Hosted retrieval: Supabase + Cloudflare")
         st.write(
             "Current document chunks:",
             f"{int(supabase_status.get('document_chunks_current', 0)):,}",
@@ -619,7 +622,10 @@ with st.sidebar:
             "KPI observations:",
             f"{int(supabase_status.get('kpi_observations', 0)):,}",
         )
-        st.write("Vector index:", "✅ HNSW")
+        st.write("Dense retrieval:", "✅ pgvector HNSW")
+        st.write("Lexical retrieval:", "✅ PostgreSQL FTS")
+        st.write("Fusion:", "✅ Reciprocal-rank fusion (RRF)")
+        st.write("Reranker:", "✅ Cloudflare BGE (with RRF fallback)")
     else:
         st.info("Storage: local reproducible fallback")
         st.write("KPI table:", "✅" if bootstrap and bootstrap.kpi_ready else "⚠️ docs-only")
