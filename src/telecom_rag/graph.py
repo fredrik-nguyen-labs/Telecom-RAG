@@ -22,6 +22,7 @@ class AppState(TypedDict, total=False):
     answer: str
     sources: list[dict[str, Any]]
     latency_s: float
+    llm_usage: dict[str, int]
     route: str
 
 
