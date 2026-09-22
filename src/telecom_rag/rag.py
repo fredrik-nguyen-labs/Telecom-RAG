@@ -203,16 +203,21 @@ def load_advanced_retriever(
     )
 
 
-def get_llm(provider: str = "ollama", model: str | None = None) -> BaseChatModel:
+def get_llm(
+    provider: str = "ollama",
+    model: str | None = None,
+    max_output_tokens: int | None = None,
+) -> BaseChatModel:
     """Return a deterministic, bounded-output chat model for the demo."""
     provider = provider.lower().strip()
+    output_limit = max_output_tokens or MAX_OUTPUT_TOKENS
     if provider == "ollama":
         from langchain_ollama import ChatOllama
 
         return ChatOllama(
             model=model or OLLAMA_MODEL,
             temperature=0,
-            num_predict=MAX_OUTPUT_TOKENS,
+            num_predict=output_limit,
         )
     if provider == "cloudflare":
         account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", CLOUDFLARE_ACCOUNT_ID)
@@ -233,7 +238,7 @@ def get_llm(provider: str = "ollama", model: str | None = None) -> BaseChatModel
                 f"{account_id}/ai/v1"
             ),
             temperature=0,
-            max_tokens=MAX_OUTPUT_TOKENS,
+            max_tokens=output_limit,
             timeout=60,
             max_retries=2,
         )
@@ -299,7 +304,10 @@ Optionally, when useful:
 ## Technical interpretation
 A concise source-supported explanation of the mechanism.
 
-Keep the response concise and technically useful."""
+Give a complete, technically useful answer at the depth the question deserves. For
+explanatory or analytical questions, explain the important relationships and mechanisms
+instead of reducing the answer to a few sentences. Avoid filler, but do not artificially
+shorten the response."""
 
 
 KPI_RAG_SYSTEM_PROMPT = """You are a telecom network analysis assistant.
@@ -331,11 +339,15 @@ Clearly qualified possible explanations and what additional evidence would disti
 them. Never present hypotheses as measured facts.
 
 Cite source-supported technical claims with [S1], [S2], etc. Do not invent universal
-thresholds not supported by a source. Keep each section concise."""
+thresholds not supported by a source. Give enough detail to connect the statistical
+evidence to the technical mechanism. Prioritize the strongest findings, explain why they
+matter, and distinguish clearly between evidence and inference. Avoid filler, but do not
+artificially shorten the response."""
 
 BASELINE_SYSTEM_PROMPT = """You are a telecom network analysis assistant.
 Answer from your pretrained knowledge only. If you are unsure, say so. Do not invent
-citations or pretend you consulted documents. Keep the answer concise and technical."""
+citations or pretend you consulted documents. Give a complete technical answer at the
+depth the question deserves rather than defaulting to a very short response."""
 
 
 _SECTION_RE = re.compile(
