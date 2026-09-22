@@ -325,17 +325,17 @@ def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
     citation_order, claims = _citation_claims(answer)
     by_id = {source.get("citation"): source for source in sources}
 
-    if citation_order:
-        selected = [
-            (citation_id, by_id[citation_id])
-            for citation_id in citation_order
-            if citation_id in by_id
-        ]
-    else:
-        selected = [
-            (str(source.get("citation") or f"S{idx}"), source)
-            for idx, source in enumerate(sources[:3], start=1)
-        ]
+    cited_ids = [citation_id for citation_id in citation_order if citation_id in by_id]
+    remaining_ids = [
+        str(source.get("citation") or f"S{idx}")
+        for idx, source in enumerate(sources, start=1)
+        if str(source.get("citation") or f"S{idx}") not in cited_ids
+    ]
+    selected = [
+        (citation_id, by_id[citation_id])
+        for citation_id in cited_ids + remaining_ids
+        if citation_id in by_id
+    ]
 
     if not selected:
         return
@@ -354,21 +354,24 @@ def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
         if location:
             label += f" — {location}"
 
-        cited_claims = claims.get(citation_id, [])
-        if cited_claims:
-            for claim in cited_claims:
-                st.markdown(f"**Claim:** {claim}")
+        with st.container(border=True):
+            cited_claims = claims.get(citation_id, [])
+            if cited_claims:
+                for claim in cited_claims:
+                    st.markdown(f"**Claim:** {claim}")
+            else:
+                st.markdown("**Claim:** Retrieved reference not cited in the answer.")
 
-        source_url = _source_link(source)
-        if source_url:
-            st.markdown(f"**Source:** [{title}]({source_url})")
-        else:
-            st.markdown(f"**Source:** {title}")
-
-        with st.expander(f"View retrieved evidence — {citation_id}", expanded=False):
+            source_url = _source_link(source)
             if source_url:
-                st.caption(source_url)
-            st.write(source.get("content") or source.get("excerpt") or "")
+                st.markdown(f"**Source:** [{title}]({source_url})")
+                st.markdown(source_url)
+            else:
+                st.markdown(f"**Source:** {title}")
+
+            st.markdown(f"**Reference:** [{citation_id}] {location}".rstrip())
+            with st.expander("Retrieved evidence", expanded=False):
+                st.markdown(source.get("content") or source.get("excerpt") or "")
 
 
 if cloudflare_available:
