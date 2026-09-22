@@ -283,7 +283,7 @@ def _render_cloudflare_quota(placeholder, model_name: str) -> None:
                 )
                 return
             st.metric(
-                "Estimated remaining today",
+                "Estimated generation quota left",
                 f"{remaining:,.0f} Neurons",
                 delta=f"{used:,.1f} app-estimated used",
                 delta_color="inverse",
@@ -291,9 +291,10 @@ def _render_cloudflare_quota(placeholder, model_name: str) -> None:
             progress = min(max(float(used) / 10_000.0, 0.0), 1.0)
             st.progress(progress)
             st.caption(
-                f"Tracked app calls today: {int(usage.get('calls', 0))}. "
-                "Estimate resets at 00:00 UTC. Cloudflare dashboard is authoritative "
-                "for account-wide usage."
+                f"Tracked generation calls today: {int(usage.get('calls', 0))}. "
+                "This estimate does not yet include serverless embedding/reranker usage. "
+                "It resets at 00:00 UTC; Cloudflare's dashboard is authoritative for "
+                "account-wide usage."
             )
         except Exception:
             st.caption(
