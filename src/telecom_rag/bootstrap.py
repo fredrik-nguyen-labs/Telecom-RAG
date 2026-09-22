@@ -85,7 +85,7 @@ def ensure_vector_index() -> tuple[bool, str]:
         return False, f"FAISS bootstrap failed: {exc}"
 
 
-def ensure_demo_assets() -> BootstrapReport:
+def ensure_local_assets() -> BootstrapReport:
     """Prepare reproducible assets for the local Streamlit development path.
 
     KPI data is optional: if Dryad is temporarily unavailable, documentation-only RAG
