@@ -9,7 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 
 from .kpi import analyze_observation
-from .rag import answer_with_rag, answer_without_rag
+from .rag import answer_with_rag, answer_without_rag, message_text
 from .retrieval import RetrieverProtocol, build_retrieval_query
 
 
@@ -156,7 +156,7 @@ def build_graph(
                 ]
             )
             router_latency_s = time.perf_counter() - started
-            parsed = _parse_router_response(response.content)
+            parsed = _parse_router_response(message_text(response.content))
             if parsed is None:
                 return {
                     "route": "docs-only",
