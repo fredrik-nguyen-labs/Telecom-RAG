@@ -55,3 +55,21 @@ def test_rrf_marks_documents_retrieved_by_both_methods() -> None:
     assert "a" in by_id
     assert by_id["a"].metadata["retrieval_methods"] == "dense+bm25"
     assert by_id["a"].metadata["rrf_score"] > 0
+
+
+def test_dense_reranked_uses_only_dense_candidates() -> None:
+    docs = _docs()
+    retriever = AdvancedRetriever(FakeDenseStore(docs), docs)
+
+    captured: list[str] = []
+
+    def fake_rerank(query: str, candidates: list[Document], k: int):
+        captured.extend(doc.metadata["chunk_id"] for doc in candidates)
+        return candidates[:k]
+
+    retriever.rerank = fake_rerank  # type: ignore[method-assign]
+    result = retriever.retrieve("RSRP", k=2, mode="dense_reranked")
+
+    assert result.mode == "dense_reranked"
+    assert captured == ["a", "b", "c"]
+    assert [doc.metadata["chunk_id"] for doc in result.documents] == ["a", "b"]
