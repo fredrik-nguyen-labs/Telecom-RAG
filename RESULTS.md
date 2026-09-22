@@ -1,0 +1,68 @@
+# Results
+
+Evaluation results for the current Telecom-RAG system. Local and hosted measurements are reported separately because they use different retrieval and inference backends.
+
+## Local retrieval
+
+The local retrieval benchmark evaluates all 20 questions at `k=4`.
+
+| Retrieval mode | Source hit | Source recall | Source precision | MRR | Evidence recall | Mean latency |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Dense BGE + FAISS | **0.900** | **0.875** | 0.675 | 0.792 | **0.800** | **0.016 s** |
+| Hybrid BGE + BM25 + RRF | 0.850 | 0.850 | 0.650 | 0.817 | **0.800** | 0.021 s |
+| Hybrid + cross-encoder reranking | **0.900** | **0.875** | **0.788** | **0.829** | 0.775 | 1.141 s |
+
+The reranker improved source precision and MRR relative to dense retrieval, at a substantial latency cost. In this benchmark, adding BM25/RRF alone did not improve source recall over dense retrieval.
+
+## Local generation
+
+The current local generation comparison contains the first 5 benchmark questions and compares the same local LLM with and without retrieved context.
+
+| Mode | Semantic similarity | Required-term recall | Answer-context similarity | Generation latency | Total latency |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| LLM only | 0.789 | 0.733 | — | 4.001 s | 4.001 s |
+| RAG | **0.800** | **1.000** | 0.840 | 4.169 s | 5.340 s |
+
+On this bounded sample, RAG increased required-term recall from **0.733 to 1.000**. The strongest improvement was on corpus-specific questions, where required-term recall increased from **0.000 to 1.000**.
+
+Citation metrics are not treated as representative in this local generation run because the 96-token output cap frequently truncated answers before citation markers.
+
+### Local run configuration
+
+- 20 retrieval questions
+- 5 generation questions
+- local BGE embeddings + FAISS
+- BM25 + RRF for hybrid retrieval
+- MiniLM cross-encoder reranker
+- Ollama generation with `qwen2.5:3b`
+- `temperature=0`
+- `max_output_tokens=96`
+
+The local corpus was incomplete during this run: 6 of 10 configured sources were downloaded successfully, while four Ericsson pages returned HTTP 403. The results should therefore be interpreted as a partial-corpus benchmark.
+
+## Hosted evaluation
+
+A separate hosted benchmark is implemented for the production stack:
+
+```text
+Supabase pgvector + PostgreSQL FTS
+                 ↓
+                RRF
+                 ↓
+      Cloudflare BGE reranker
+                 ↓
+       Cloudflare generation
+```
+
+It also includes the dedicated semantic-routing benchmark.
+
+The hosted evaluation has **not produced benchmark scores yet** because the GitHub Actions environment does not currently contain the required Cloudflare and Supabase credentials. No hosted results are reported here until that run completes successfully.
+
+## Raw local outputs
+
+- `eval/results/retrieval_ablation.csv`
+- `eval/results/retrieval_summary.csv`
+- `eval/results/generation_comparison.csv`
+- `eval/results/generation_summary.csv`
+- `eval/results/generation_by_category.csv`
+- `eval/results/02_rag_demo_and_evaluation.executed.ipynb`
