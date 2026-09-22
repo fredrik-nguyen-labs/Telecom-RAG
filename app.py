@@ -52,7 +52,7 @@ def _read_secret(name: str) -> str | None:
 for secret_name in (
     "CLOUDFLARE_ACCOUNT_ID",
     "CLOUDFLARE_API_TOKEN",
-    "CLOUDFLARE_MODEL",
+    "CLOUDFLARE_GENERATOR_MODEL",
     "CLOUDFLARE_ROUTER_MODEL",
     "CLOUDFLARE_EMBEDDING_MODEL",
     "CLOUDFLARE_RERANKER_MODEL",
@@ -505,7 +505,7 @@ with st.sidebar:
 
     if cloudflare_available:
         provider = "cloudflare"
-        model = os.getenv("CLOUDFLARE_MODEL", CLOUDFLARE_MODEL)
+        model = os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_MODEL)
         st.success("Hosted LLM configured")
         router_model = os.getenv("CLOUDFLARE_ROUTER_MODEL", CLOUDFLARE_ROUTER_MODEL)
         st.caption(f"Generator: {model}")
@@ -527,7 +527,7 @@ with st.sidebar:
         elif provider == "cloudflare":
             model = st.text_input(
                 "Cloudflare model",
-                value=os.getenv("CLOUDFLARE_MODEL", CLOUDFLARE_MODEL),
+                value=os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_MODEL),
             )
             st.warning(
                 "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN to use "
