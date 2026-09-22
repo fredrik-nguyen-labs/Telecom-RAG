@@ -58,9 +58,6 @@ USE_CLOUDFLARE_RETRIEVAL = os.getenv(
     "USE_CLOUDFLARE_RETRIEVAL", "true"
 ).lower() in {"1", "true", "yes", "on"}
 
-# Optional paid fallback retained for compatibility with the known-good model factory.
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
-
 
 # Hosted-application safety defaults.
 MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "650"))
