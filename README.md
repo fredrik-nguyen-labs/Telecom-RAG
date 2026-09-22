@@ -163,7 +163,8 @@ Hosted models:
 
 - query embeddings: `@cf/baai/bge-small-en-v1.5`
 - reranker: `@cf/baai/bge-reranker-base`
-- generation default: `@cf/meta/llama-3.2-3b-instruct`
+- semantic router: `@cf/zai-org/glm-4.7-flash`
+- generation default: `@cf/google/gemma-4-26b-a4b-it`
 
 If the hosted reranker is busy or times out, the application falls back to the already-fused RRF ranking instead of failing the request.
 
@@ -249,7 +250,8 @@ For hosted inference:
 ```text
 CLOUDFLARE_ACCOUNT_ID=...
 CLOUDFLARE_API_TOKEN=...
-CLOUDFLARE_MODEL=@cf/meta/llama-3.2-3b-instruct
+CLOUDFLARE_GENERATOR_MODEL=@cf/google/gemma-4-26b-a4b-it
+CLOUDFLARE_ROUTER_MODEL=@cf/zai-org/glm-4.7-flash
 CLOUDFLARE_EMBEDDING_MODEL=@cf/baai/bge-small-en-v1.5
 CLOUDFLARE_RERANKER_MODEL=@cf/baai/bge-reranker-base
 USE_CLOUDFLARE_RETRIEVAL=true
@@ -304,7 +306,8 @@ Required Streamlit secrets:
 ```toml
 CLOUDFLARE_ACCOUNT_ID = "..."
 CLOUDFLARE_API_TOKEN = "..."
-CLOUDFLARE_MODEL = "@cf/meta/llama-3.2-3b-instruct"
+CLOUDFLARE_GENERATOR_MODEL = "@cf/google/gemma-4-26b-a4b-it"
+CLOUDFLARE_ROUTER_MODEL = "@cf/zai-org/glm-4.7-flash"
 
 USE_SUPABASE = "true"
 SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
