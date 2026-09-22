@@ -572,17 +572,10 @@ with st.sidebar:
             st.warning("OPENAI_API_KEY is not configured.")
 
     use_rag = st.toggle("Use RAG", value=True)
-    retrieval_mode = st.selectbox(
-        "Retrieval pipeline",
-        ["reranked", "hybrid", "dense"],
-        index=0,
-        help=(
-            "Hosted: Cloudflare BGE query embedding → Supabase pgvector dense search + "
-            "PostgreSQL full-text search → reciprocal-rank fusion (RRF). Reranked mode "
-            "adds the Cloudflare BGE reranker and falls back to fused RRF results if the "
-            "reranker is unavailable. Local/notebook: BGE/FAISS + BM25 + RRF + local "
-            "cross-encoder reranking."
-        ),
+    retrieval_mode = "reranked"
+    st.caption(
+        "Retrieval: hybrid dense + lexical search → RRF → reranking. "
+        "If hosted reranking is unavailable, the app falls back to the fused RRF ranking."
     )
     compare = st.toggle(
         "Also run the LLM-only baseline",
