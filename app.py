@@ -128,10 +128,27 @@ if supabase_runtime_configured():
         supabase_error = str(exc)
 
 storage_backend = "supabase" if using_supabase else "local"
+hosted_lightweight = os.getenv("HOSTED_LIGHTWEIGHT", "").lower() in {
+    "1", "true", "yes", "on"
+}
 
 if using_supabase:
     bootstrap = None
     kpis = cached_kpis("supabase")
+elif hosted_lightweight:
+    st.error(
+        "The lightweight hosted deployment requires a working, seeded Supabase backend."
+    )
+    with st.expander("Hosted backend details", expanded=True):
+        if supabase_error:
+            st.write("Supabase error:", supabase_error)
+        else:
+            st.write("Supabase status:", supabase_status)
+        st.write(
+            "Check USE_SUPABASE, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, "
+            "and that the database has been seeded."
+        )
+    st.stop()
 else:
     bootstrap = cached_bootstrap()
 
