@@ -43,7 +43,7 @@ DEFINITION_INTENT_RE = re.compile(
 )
 
 OBSERVATION_REFERENCE_RE = re.compile(
-    r"\b(?:this|these|selected|current)\s+"
+    r"\b(?:this|these|selected|current|my|our)\s+"
     r"(?:observation|measurement|row|sample|values?|kpis?|"
     r"throughput|rsrp|sinr|cqi|mcs|rsrq)\b",
     flags=re.IGNORECASE,
@@ -51,7 +51,7 @@ OBSERVATION_REFERENCE_RE = re.compile(
 
 DIAGNOSTIC_REFERENCE_RE = re.compile(
     r"\b(?:diagnose|investigate|analy[sz]e|explain)\s+"
-    r"(?:this|these|the\s+selected|the\s+current)\b",
+    r"(?:this|these|my|our|the\s+selected|the\s+current)\b",
     flags=re.IGNORECASE,
 )
 
