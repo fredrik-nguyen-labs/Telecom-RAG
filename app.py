@@ -11,16 +11,20 @@ sys.path.insert(0, str(ROOT / "src"))
 import pandas as pd
 import streamlit as st
 
-from telecom_rag.config import (
-    CLOUDFLARE_MODEL,
-    CLOUDFLARE_ROUTER_MODEL,
-    MAX_QUESTION_CHARS,
-    MAX_REQUEST_UNITS_PER_SESSION,
-    MAX_TOP_K_PUBLIC,
-    OPENAI_MODEL,
-    OLLAMA_MODEL,
-    PROCESSED_KPI_PATH,
+from telecom_rag import config as rag_config
+
+CLOUDFLARE_MODEL = rag_config.CLOUDFLARE_MODEL
+CLOUDFLARE_ROUTER_MODEL = getattr(
+    rag_config,
+    "CLOUDFLARE_ROUTER_MODEL",
+    "@cf/zai-org/glm-4.7-flash",
 )
+MAX_QUESTION_CHARS = rag_config.MAX_QUESTION_CHARS
+MAX_REQUEST_UNITS_PER_SESSION = rag_config.MAX_REQUEST_UNITS_PER_SESSION
+MAX_TOP_K_PUBLIC = rag_config.MAX_TOP_K_PUBLIC
+OPENAI_MODEL = rag_config.OPENAI_MODEL
+OLLAMA_MODEL = rag_config.OLLAMA_MODEL
+PROCESSED_KPI_PATH = rag_config.PROCESSED_KPI_PATH
 from telecom_rag.graph import build_graph
 from telecom_rag.rag import get_llm
 from telecom_rag.supabase_backend import (
