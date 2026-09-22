@@ -33,6 +33,7 @@ dependencies = [
 dev = [
     "jupyterlab==4.6.3",
     "notebook==7.6.2",
+    "pytest==8.4.2",
 ]
 
 [tool.hatch.build.targets.wheel]
