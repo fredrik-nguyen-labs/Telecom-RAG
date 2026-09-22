@@ -1,3 +1,0 @@
-mode,semantic_similarity,required_term_recall,citation_present,citation_reference_validity,citation_support_similarity,answer_context_similarity,evidence_term_recall,generation_latency_s,retrieval_latency_s,total_latency_s
-llm_only,0.789,0.733,0.0,,,,,4.001,0.0,4.001
-rag,0.8,1.0,0.0,0.0,0.0,0.84,0.833,4.169,1.171,5.34
