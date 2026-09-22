@@ -63,7 +63,7 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 
 
 # Hosted-application safety defaults.
-MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "1400"))
+MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "650"))
 MAX_QUESTION_CHARS = int(os.getenv("MAX_QUESTION_CHARS", "700"))
 MAX_REQUEST_UNITS_PER_SESSION = int(os.getenv("MAX_REQUEST_UNITS_PER_SESSION", "12"))
 
