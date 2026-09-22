@@ -354,22 +354,20 @@ def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
         if location:
             label += f" — {location}"
 
-        with st.expander(label, expanded=False):
-            cited_claims = claims.get(citation_id, [])
-            if cited_claims:
-                st.markdown("**Claim supported by this source**")
-                for claim in cited_claims:
-                    st.markdown(f"- {claim}")
+        cited_claims = claims.get(citation_id, [])
+        if cited_claims:
+            for claim in cited_claims:
+                st.markdown(f"**Claim:** {claim}")
 
-            st.markdown("**Source**")
-            source_url = _source_link(source)
+        source_url = _source_link(source)
+        if source_url:
+            st.markdown(f"**Source:** [{title}]({source_url})")
+        else:
+            st.markdown(f"**Source:** {title}")
+
+        with st.expander(f"View retrieved evidence — {citation_id}", expanded=False):
             if source_url:
-                st.markdown(f"[{title}]({source_url})")
                 st.caption(source_url)
-            else:
-                st.write(title)
-
-            st.markdown("**Retrieved evidence**")
             st.write(source.get("content") or source.get("excerpt") or "")
 
 
