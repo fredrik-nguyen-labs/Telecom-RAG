@@ -403,8 +403,11 @@ headings. Usually use 1-3 short paragraphs or a few bullets only when bullets ar
 Answer the question directly and include only the most relevant technical explanation.
 
 Cite every source-supported technical claim inline with [S1], [S2], etc., placing the
-citation immediately after the sentence or claim it supports. Use only source IDs present
-in the retrieved context. If the context is insufficient, say so briefly rather
+citation immediately after the sentence or claim it supports. Review all retrieved
+sources before finalizing and cite every source that materially supports the answer; when
+the retrieved set is relevant, prefer using the full set rather than relying on only one
+source. Use only source IDs present in the retrieved context. If the context is
+insufficient, say so briefly rather
 than guessing. Avoid repetition, long background explanations, and unnecessary caveats."""
 
 
@@ -419,8 +422,11 @@ statistics, or other diagnostics unless they are directly useful. Clearly distin
 observed evidence from possible explanations, but keep both in the same answer.
 
 Cite every source-supported technical claim inline with [S1], [S2], etc., placing the
-citation immediately after the sentence or claim it supports. Use only source IDs present
-in the retrieved context. Do not cite the user's KPI values or deterministic
+citation immediately after the sentence or claim it supports. Review all retrieved
+sources before finalizing and cite every source that materially supports the answer; when
+the retrieved set is relevant, prefer using the full set rather than relying on only one
+source. Use only source IDs present in the retrieved context. Do not cite the user's KPI
+values or deterministic
 dataset statistics themselves. Do not invent universal thresholds. Avoid repetition and
 unnecessary background detail."""
 
