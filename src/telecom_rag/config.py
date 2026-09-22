@@ -35,6 +35,16 @@ RERANK_CANDIDATES = int(os.getenv("RAG_RERANK_CANDIDATES", "20"))
 RRF_K = int(os.getenv("RAG_RRF_K", "60"))
 
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
+
+# Free hosted generation for the public demo. Workers AI exposes an
+# OpenAI-compatible Chat Completions endpoint, so the LangChain interface stays shared.
+CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID", "")
+CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN", "")
+CLOUDFLARE_MODEL = os.getenv(
+    "CLOUDFLARE_MODEL", "@cf/meta/llama-3.2-3b-instruct"
+)
+
+# Optional paid fallback.
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 
 # Public-demo safety defaults. Environment variables can tighten these further.
