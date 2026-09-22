@@ -257,51 +257,11 @@ def _citation_claims(answer: str) -> tuple[list[str], dict[str, list[str]]]:
     return order, claims
 
 
-def _render_answer_cards(result: dict) -> None:
-    """Render the model contract as distinct, easy-to-scan evidence cards."""
-    sections = result.get("answer_sections") or {}
-    if not sections:
-        sections = {"answer": result.get("answer", "")}
-
-    if sections.get("answer"):
-        with st.container(border=True):
-            st.markdown("### ✅ Answer")
-            st.markdown(sections["answer"])
-
-    secondary = []
-    is_kpi_route = result.get("route") == "kpi+docs"
-
-    observation_evidence = (
-        sections.get("observation_evidence") or sections.get("measured_evidence")
-    )
-    if is_kpi_route and observation_evidence:
-        secondary.append(("📊 Observation evidence", observation_evidence))
-    if sections.get("technical_interpretation"):
-        secondary.append(
-            ("📚 Technical interpretation", sections["technical_interpretation"])
-        )
-
-    if len(secondary) == 2:
-        cols = st.columns(2)
-        for col, (title, body) in zip(cols, secondary):
-            with col:
-                with st.container(border=True):
-                    st.markdown(f"### {title}")
-                    st.markdown(body)
-    else:
-        for title, body in secondary:
-            with st.container(border=True):
-                st.markdown(f"### {title}")
-                st.markdown(body)
-
-    if is_kpi_route and sections.get("hypotheses"):
-        with st.container(border=True):
-            st.markdown("### 🧭 Hypotheses")
-            st.markdown(sections["hypotheses"])
-            st.caption(
-                "Hypotheses are possible explanations, not measured facts. "
-                "They are shown only for KPI-diagnostic questions."
-            )
+def _render_answer(result: dict) -> None:
+    """Render the model output as one concise answer."""
+    answer = str(result.get("answer", "")).strip()
+    if answer:
+        st.markdown(answer)
 
 
 def _render_kpi_analytics(result: dict) -> None:
@@ -464,58 +424,44 @@ def _render_kpi_analytics(result: dict) -> None:
 
 
 def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
-    """Show only sources actually cited by the answer, with claim and exact chunk."""
+    """Render the sources cited in one answer without extra diagnostic prose."""
     if not sources:
         return
 
-    citation_order, claims = _citation_claims(answer)
-    if not citation_order:
-        st.info(
-            "The answer did not include inline [S#] markers. The retrieved evidence "
-            "used for this response is still available below."
-        )
-        st.subheader("Retrieved evidence")
-        for rank, source in enumerate(sources[:3], start=1):
-            title = source.get("title") or source.get("source") or "Unknown source"
-            with st.expander(f"{rank}. {title}", expanded=rank == 1):
-                st.code(
-                    source.get("content") or source.get("excerpt") or "",
-                    language=None,
-                )
+    citation_order, _ = _citation_claims(answer)
+    by_id = {source.get("citation"): source for source in sources}
+
+    if citation_order:
+        selected = [
+            (citation_id, by_id[citation_id])
+            for citation_id in citation_order
+            if citation_id in by_id
+        ]
+    else:
+        selected = [
+            (str(source.get("citation") or f"S{idx}"), source)
+            for idx, source in enumerate(sources[:3], start=1)
+        ]
+
+    if not selected:
         return
 
-    by_id = {source.get("citation"): source for source in sources}
-    st.subheader("Cited evidence")
-    st.caption(
-        "Each card links the claim in the answer to the exact retrieved chunk supplied "
-        "to the model. Page/section metadata comes from the source document."
-    )
-
-    for rank, citation_id in enumerate(citation_order, start=1):
-        source = by_id.get(citation_id)
-        if not source:
-            st.warning(f"[{citation_id}] was cited in the answer but is not in the retrieved sources.")
-            continue
-
+    st.markdown("**Sources**")
+    for citation_id, source in selected:
         location_bits = []
         if source.get("page"):
-            location_bits.append(f"page {source['page']}")
+            location_bits.append(f"p. {source['page']}")
         if source.get("section"):
-            location_bits.append(f"section {source['section']}")
-        if source.get("chunk_id"):
-            location_bits.append(f"chunk {source['chunk_id']}")
-        location = " · ".join(location_bits) or "location metadata unavailable"
+            location_bits.append(str(source["section"]))
+        location = " · ".join(location_bits)
 
         title = source.get("title") or source.get("source") or "Unknown source"
-        label = f"{rank}. [{citation_id}] {title} — {location}"
+        label = f"[{citation_id}] {title}"
+        if location:
+            label += f" — {location}"
 
-        with st.expander(label, expanded=rank <= 2):
-            st.markdown("**Claim(s) in the answer using this citation**")
-            for claim in claims.get(citation_id, []):
-                st.markdown(f"- {claim}")
-
-            st.markdown("**Exact retrieved evidence chunk**")
-            st.code(source.get("content") or source.get("excerpt") or "", language=None)
+        with st.expander(label, expanded=False):
+            st.write(source.get("content") or source.get("excerpt") or "")
 
 
 if cloudflare_available:
@@ -655,56 +601,48 @@ with left:
 
 
 with right:
-    st.subheader("2. Ask a question")
+    header_cols = st.columns([4, 1])
+    with header_cols[0]:
+        st.subheader("2. Conversation")
+    with header_cols[1]:
+        if st.session_state.chat_messages:
+            if st.button("New chat", use_container_width=True):
+                st.session_state.chat_messages = []
+                st.rerun()
 
-    if st.session_state.chat_messages:
-        if st.button("New conversation"):
-            st.session_state.chat_messages = []
-            st.rerun()
-
-        for message in st.session_state.chat_messages[-8:]:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+    for message in st.session_state.chat_messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            if message["role"] == "assistant":
+                _render_cited_evidence(
+                    message["content"],
+                    message.get("sources", []),
+                )
 
     if observation_mode == "Enter your own KPIs" and observation:
-        default_q = (
-            "Diagnose these values. What stands out, what could explain the throughput, "
-            "and what should I investigate next?"
-        )
+        example_q = "What stands out in these values and what should I investigate?"
     elif observation:
-        default_q = (
-            "Why might this observation have this throughput, and which radio measurements "
-            "are most relevant to investigate?"
-        )
+        example_q = "Why might this observation have this throughput?"
     else:
-        default_q = "What do RSRP and SINR measure in a 5G NR network?"
-
-    if st.session_state.chat_messages:
-        default_q = ""
-
-    question = st.text_area(
-        "Question",
-        value=default_q,
-        height=130,
-        max_chars=MAX_QUESTION_CHARS,
-        help=f"Maximum {MAX_QUESTION_CHARS} characters per request.",
-    )
+        example_q = "What do RSRP and SINR measure in 5G NR?"
 
     units_needed = 1
     run_disabled = units_needed > remaining_units
-
     if run_disabled:
         st.warning("This session has reached its request limit.")
 
-    run = st.button(
-        "Analyze",
-        type="primary",
-        use_container_width=True,
+    question = st.chat_input(
+        "Ask a follow-up or a new telecom question",
+        max_chars=MAX_QUESTION_CHARS,
         disabled=run_disabled,
     )
+    if not st.session_state.chat_messages:
+        st.caption(f"Try: {example_q}")
+
+run = bool(question)
 
 if run:
-    cleaned_question = question.strip()
+    cleaned_question = str(question).strip()
 
     if not cleaned_question:
         st.error("Enter a question first.")
@@ -769,18 +707,23 @@ if run:
                 st.write("Retrieved chunks:", len(result.get("sources", [])))
             st.stop()
 
+        sources = result.get("sources", [])
         st.session_state.chat_messages.extend(
             [
                 {"role": "user", "content": cleaned_question},
-                {"role": "assistant", "content": answer_text},
+                {
+                    "role": "assistant",
+                    "content": answer_text,
+                    "sources": sources,
+                },
             ]
         )
 
-        _render_answer_cards(result)
-        _render_kpi_analytics(result)
-
-        sources = result.get("sources", [])
-        _render_cited_evidence(answer_text, sources)
+        with st.chat_message("user"):
+            st.markdown(cleaned_question)
+        with st.chat_message("assistant"):
+            _render_answer(result)
+            _render_cited_evidence(answer_text, sources)
 
         with st.expander("Technical details"):
             st.write(
@@ -822,9 +765,7 @@ if run:
 
 st.divider()
 st.caption(
-    "KPI percentiles, correlations, nearest-neighbor comparisons and anomaly/rarity "
-    "statistics are relative to this measurement dataset, not universal telecom quality "
-    "thresholds. Retrieved sources are shown so the technical explanation can be inspected."
+    "Answers use the selected KPI context when relevant and cite retrieved technical sources."
 )
 
 st.markdown("#### Tech stack")
