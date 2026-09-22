@@ -28,6 +28,12 @@ The system keeps three evidence layers separate:
 - statistics computed from the Ericsson/AERPAW reference dataset,
 - technical facts retrieved from standards and documentation.
 
+### Session chat
+
+The web app keeps a bounded recent conversation in Streamlit session state so follow-up
+questions such as "what about SINR?" can reuse the immediate context. Conversation history
+is session-only and can be cleared with **New conversation**.
+
 ## KPI diagnostics
 
 For KPI-aware questions, the system computes:
