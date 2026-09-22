@@ -11,20 +11,16 @@ sys.path.insert(0, str(ROOT / "src"))
 import pandas as pd
 import streamlit as st
 
-from telecom_rag import config as rag_config
-
-CLOUDFLARE_MODEL = rag_config.CLOUDFLARE_MODEL
-CLOUDFLARE_ROUTER_MODEL = getattr(
-    rag_config,
-    "CLOUDFLARE_ROUTER_MODEL",
-    "@cf/zai-org/glm-4.7-flash",
+from telecom_rag.config import (
+    CLOUDFLARE_GENERATOR_MODEL,
+    CLOUDFLARE_ROUTER_MODEL,
+    MAX_QUESTION_CHARS,
+    MAX_REQUEST_UNITS_PER_SESSION,
+    MAX_TOP_K_PUBLIC,
+    OPENAI_MODEL,
+    OLLAMA_MODEL,
+    PROCESSED_KPI_PATH,
 )
-MAX_QUESTION_CHARS = rag_config.MAX_QUESTION_CHARS
-MAX_REQUEST_UNITS_PER_SESSION = rag_config.MAX_REQUEST_UNITS_PER_SESSION
-MAX_TOP_K_PUBLIC = rag_config.MAX_TOP_K_PUBLIC
-OPENAI_MODEL = rag_config.OPENAI_MODEL
-OLLAMA_MODEL = rag_config.OLLAMA_MODEL
-PROCESSED_KPI_PATH = rag_config.PROCESSED_KPI_PATH
 from telecom_rag.graph import build_graph
 from telecom_rag.rag import get_llm
 from telecom_rag.supabase_backend import (
@@ -66,7 +62,6 @@ for secret_name in (
     "USE_SUPABASE",
     "SUPABASE_URL",
     "SUPABASE_PUBLISHABLE_KEY",
-    "SUPABASE_ANON_KEY",
 ):
     secret_value = _read_secret(secret_name)
     if secret_value and not os.getenv(secret_name):
@@ -92,34 +87,11 @@ def cached_retriever(backend: str):
 
 @st.cache_resource(show_spinner=False)
 def cached_llm(provider: str, model: str, max_output_tokens: int | None = None):
-    try:
-        return get_llm(
-            provider=provider,
-            model=model,
-            max_output_tokens=max_output_tokens,
-        )
-    except TypeError as exc:
-        # Streamlit may briefly reuse an older imported module during a hot reload.
-        # Fall back to the legacy signature until the process fully refreshes.
-        if "max_output_tokens" not in str(exc):
-            raise
-        return get_llm(provider=provider, model=model)
-
-
-def _build_graph_compat(llm, retriever, router_llm, **kwargs):
-    try:
-        return build_graph(
-            llm,
-            retriever,
-            router_llm=router_llm,
-            **kwargs,
-        )
-    except TypeError as exc:
-        # Same hot-reload compatibility as cached_llm: once Streamlit restarts,
-        # the current graph signature is used normally.
-        if "router_llm" not in str(exc):
-            raise
-        return build_graph(llm, retriever, **kwargs)
+    return get_llm(
+        provider=provider,
+        model=model,
+        max_output_tokens=max_output_tokens,
+    )
 
 
 @st.cache_data(show_spinner=False)
@@ -538,7 +510,7 @@ with st.sidebar:
 
     if cloudflare_available:
         provider = "cloudflare"
-        model = os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_MODEL)
+        model = os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_GENERATOR_MODEL)
         st.success("Hosted LLM configured")
         router_model = os.getenv("CLOUDFLARE_ROUTER_MODEL", CLOUDFLARE_ROUTER_MODEL)
         st.caption(f"Generator: {model}")
@@ -560,7 +532,7 @@ with st.sidebar:
         elif provider == "cloudflare":
             model = st.text_input(
                 "Cloudflare model",
-                value=os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_MODEL),
+                value=os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_GENERATOR_MODEL),
             )
             st.warning(
                 "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN to use "
@@ -851,10 +823,10 @@ if run:
             if provider == "cloudflare"
             else llm
         )
-        graph = _build_graph_compat(
+        graph = build_graph(
             llm,
             retriever,
-            router_llm,
+            router_llm=router_llm,
             reference_df=kpis,
             top_k=top_k,
             retrieval_mode=retrieval_mode,
@@ -974,7 +946,7 @@ if run:
                     st.write(source["excerpt"])
 
         if compare and use_rag:
-            baseline_graph = _build_graph_compat(
+            baseline_graph = build_graph(
                 llm,
                 retriever,
                 router_llm,
