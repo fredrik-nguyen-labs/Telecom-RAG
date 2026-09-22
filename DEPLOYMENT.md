@@ -1,6 +1,6 @@
 # Streamlit Community Cloud deployment
 
-The public demo is designed for a lightweight hosted runtime:
+The application is designed for a lightweight hosted runtime:
 
 ```text
 Streamlit
