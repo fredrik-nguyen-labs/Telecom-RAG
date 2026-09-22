@@ -82,8 +82,12 @@ def cached_retriever(backend: str):
     return load_advanced_retriever(build_if_missing=False)
 
 
-@st.cache_resource(show_spinner=False)
-def cached_llm(provider: str, model: str, max_output_tokens: int | None = None):
+def create_llm(provider: str, model: str, max_output_tokens: int | None = None):
+    """Create a fresh lightweight model client for each request.
+
+    Do not cache this object in Streamlit: cached model clients can survive code
+    redeploys and keep an obsolete transport implementation alive.
+    """
     return get_llm(
         provider=provider,
         model=model,
@@ -716,9 +720,9 @@ if run:
 
     try:
         retriever = cached_retriever(storage_backend)
-        llm = cached_llm(provider, model)
+        llm = create_llm(provider, model)
         router_llm = (
-            cached_llm(
+            create_llm(
                 "cloudflare",
                 os.getenv("CLOUDFLARE_ROUTER_MODEL", CLOUDFLARE_ROUTER_MODEL),
                 8,
