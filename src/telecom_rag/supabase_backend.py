@@ -22,7 +22,6 @@ from .config import (
     RERANK_CANDIDATES,
     RERANKER_MODEL,
     RRF_K,
-    USE_CLOUDFLARE_RETRIEVAL,
     SUPABASE_SYNC_BATCH_SIZE,
     TOP_K,
 )
@@ -31,6 +30,10 @@ from .retrieval import RetrievalResult
 
 def _truthy(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _use_cloudflare_retrieval() -> bool:
+    return _truthy(os.getenv("USE_CLOUDFLARE_RETRIEVAL", "true"))
 
 
 def supabase_runtime_configured() -> bool:
@@ -199,7 +202,7 @@ class SupabaseHybridRetriever:
     @property
     def uses_cloudflare_reranker(self) -> bool:
         return bool(
-            USE_CLOUDFLARE_RETRIEVAL
+            _use_cloudflare_retrieval()
             and self.cloudflare_account_id
             and self.cloudflare_api_token
         )
@@ -389,7 +392,7 @@ def load_supabase_retriever() -> SupabaseHybridRetriever:
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", CLOUDFLARE_ACCOUNT_ID)
     api_token = os.getenv("CLOUDFLARE_API_TOKEN", CLOUDFLARE_API_TOKEN)
 
-    if USE_CLOUDFLARE_RETRIEVAL and account_id and api_token:
+    if _use_cloudflare_retrieval() and account_id and api_token:
         embeddings: Any = CloudflareQueryEmbeddings(
             account_id=account_id,
             api_token=api_token,
