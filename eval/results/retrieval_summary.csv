@@ -1,4 +1,0 @@
-mode,source_hit,source_recall,source_precision,mrr,evidence_term_recall,retrieval_latency_s
-reranked,0.9,0.875,0.788,0.829,0.775,1.141
-dense,0.9,0.875,0.675,0.792,0.8,0.016
-hybrid,0.85,0.85,0.65,0.817,0.8,0.021
