@@ -375,20 +375,62 @@ def _render_kpi_analytics(result: dict) -> None:
                     "among those similar observations."
                 )
 
-        correlations = analysis.get("throughput_correlations") or []
-        if correlations:
-            st.markdown("**Reference-dataset relationships with throughput**")
-            corr_df = pd.DataFrame(
+        consistency = analysis.get("relationship_consistency") or []
+        if consistency:
+            st.markdown("**Cross-KPI consistency**")
+            consistency_df = pd.DataFrame(
                 [
                     {
-                        "KPI": item["label"],
+                        "Target KPI": item["target_label"],
+                        "Observed": round(item["actual"], 3),
+                        "Similar-sample median": round(item["median"], 3),
+                        "Local percentile": round(item["local_percentile"], 1),
+                        "Assessment": item["status"],
+                    }
+                    for item in consistency
+                ]
+            )
+            st.dataframe(
+                consistency_df,
+                hide_index=True,
+                use_container_width=True,
+            )
+
+        key_relationships = analysis.get("key_relationships") or []
+        if key_relationships:
+            st.markdown("**Key KPI relationships in the reference dataset**")
+            relation_df = pd.DataFrame(
+                [
+                    {
+                        "Relationship": f"{item['x_label']} ↔ {item['y_label']}",
                         "Rank correlation (ρ)": round(item["spearman_rho"], 3),
                         "Observations": item["n"],
                     }
-                    for item in correlations
+                    for item in key_relationships
                 ]
             )
-            st.dataframe(corr_df, hide_index=True, use_container_width=True)
+            st.dataframe(
+                relation_df,
+                hide_index=True,
+                use_container_width=True,
+            )
+
+        correlations = analysis.get("throughput_correlations") or []
+        if correlations:
+            with st.expander("More throughput correlations"):
+                corr_df = pd.DataFrame(
+                    [
+                        {
+                            "KPI": item["label"],
+                            "Rank correlation (ρ)": round(item["spearman_rho"], 3),
+                            "Observations": item["n"],
+                        }
+                        for item in correlations
+                    ]
+                )
+                st.dataframe(corr_df, hide_index=True, use_container_width=True)
+
+        if key_relationships or correlations:
             st.caption(
                 "Rank correlations are descriptive associations in this dataset; "
                 "they do not establish causality."
