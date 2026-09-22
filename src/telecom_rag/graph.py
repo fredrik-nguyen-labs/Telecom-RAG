@@ -158,6 +158,7 @@ def build_graph(
             # even if a small model ignores the formatting instruction.
             sections = dict(result.get("answer_sections") or {})
             sections.pop("measured_evidence", None)
+            sections.pop("observation_evidence", None)
             sections.pop("hypotheses", None)
             result["answer_sections"] = sections
 
