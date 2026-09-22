@@ -24,7 +24,6 @@ from .config import (
     EMBEDDING_MODEL,
     MAX_OUTPUT_TOKENS,
     OLLAMA_MODEL,
-    OPENAI_MODEL,
     RERANKER_MODEL,
     VECTOR_STORE_DIR,
 )
@@ -243,19 +242,7 @@ def get_llm(
             timeout=60,
             max_retries=2,
         )
-    if provider == "openai":
-        if not os.getenv("OPENAI_API_KEY"):
-            raise RuntimeError("OPENAI_API_KEY is not set.")
-        from langchain_openai import ChatOpenAI
-
-        return ChatOpenAI(
-            model=model or OPENAI_MODEL,
-            temperature=0,
-            max_tokens=MAX_OUTPUT_TOKENS,
-            timeout=45,
-            max_retries=1,
-        )
-    raise ValueError("provider must be 'ollama', 'cloudflare', or 'openai'")
+    raise ValueError("provider must be 'ollama' or 'cloudflare'")
 
 
 def format_context(docs: list[Document]) -> tuple[str, list[dict[str, Any]]]:
