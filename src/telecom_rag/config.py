@@ -40,9 +40,12 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
 # OpenAI-compatible Chat Completions endpoint, so the LangChain interface stays shared.
 CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID", "")
 CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN", "")
-CLOUDFLARE_MODEL = os.getenv(
-    "CLOUDFLARE_MODEL", "@cf/google/gemma-4-26b-a4b-it"
+CLOUDFLARE_GENERATOR_MODEL = os.getenv(
+    "CLOUDFLARE_GENERATOR_MODEL", "@cf/google/gemma-4-26b-a4b-it"
 )
+# Backward-compatible internal alias. Public configuration should use
+# CLOUDFLARE_GENERATOR_MODEL so stale legacy CLOUDFLARE_MODEL secrets do not override it.
+CLOUDFLARE_MODEL = CLOUDFLARE_GENERATOR_MODEL
 CLOUDFLARE_ROUTER_MODEL = os.getenv(
     "CLOUDFLARE_ROUTER_MODEL", "@cf/zai-org/glm-4.7-flash"
 )
