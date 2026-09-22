@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -142,16 +143,33 @@ class CloudflareQueryEmbeddings:
             "https://api.cloudflare.com/client/v4/accounts/"
             f"{self.account_id}/ai/run/{self.model}"
         )
-        response = self.session.post(
-            url,
-            headers={
-                "Authorization": f"Bearer {self.api_token}",
-                "Content-Type": "application/json",
-            },
-            json={"text": query, "pooling": "cls"},
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
+        last_error: Exception | None = None
+        response = None
+        for attempt in range(2):
+            try:
+                response = self.session.post(
+                    url,
+                    headers={
+                        "Authorization": f"Bearer {self.api_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "text": query,
+                        "pooling": "cls",
+                        "options": {"rejectIfBusy": True},
+                    },
+                    timeout=min(self.timeout, 15.0),
+                )
+                response.raise_for_status()
+                break
+            except (requests.Timeout, requests.ConnectionError) as exc:
+                last_error = exc
+                if attempt == 0:
+                    time.sleep(0.35)
+        if response is None:
+            raise RuntimeError(
+                "Cloudflare query embedding timed out after retry."
+            ) from last_error
         payload = response.json()
         if not payload.get("success", False):
             raise RuntimeError(f"Cloudflare embedding failed: {payload.get('errors')}")
@@ -240,20 +258,39 @@ class SupabaseHybridRetriever:
             "https://api.cloudflare.com/client/v4/accounts/"
             f"{self.cloudflare_account_id}/ai/run/{self.cloudflare_reranker_model}"
         )
-        response = self._http.post(
-            url,
-            headers={
-                "Authorization": f"Bearer {self.cloudflare_api_token}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "query": query,
-                "contexts": [{"text": doc.page_content} for doc in candidates],
-                "top_k": len(candidates),
-            },
-            timeout=30,
-        )
-        response.raise_for_status()
+        last_error: Exception | None = None
+        response = None
+        for attempt in range(2):
+            try:
+                response = self._http.post(
+                    url,
+                    headers={
+                        "Authorization": f"Bearer {self.cloudflare_api_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "query": query,
+                        "contexts": [
+                            {"text": doc.page_content}
+                            for doc in candidates
+                        ],
+                        "top_k": len(candidates),
+                        "options": {"rejectIfBusy": True},
+                    },
+                    timeout=12,
+                )
+                response.raise_for_status()
+                break
+            except (requests.Timeout, requests.ConnectionError) as exc:
+                last_error = exc
+                if attempt == 0:
+                    time.sleep(0.35)
+
+        if response is None:
+            raise RuntimeError(
+                "Cloudflare reranker timed out after retry."
+            ) from last_error
+
         payload = response.json()
         if not payload.get("success", False):
             raise RuntimeError(f"Cloudflare reranking failed: {payload.get('errors')}")
@@ -278,12 +315,49 @@ class SupabaseHybridRetriever:
             return []
 
         if self.uses_cloudflare_reranker:
-            scores = self._cloudflare_rerank_scores(query, candidates)
-        else:
-            pairs = [(query, doc.page_content) for doc in candidates]
-            local_scores = self._get_local_reranker().predict(pairs)
-            scores = [float(score) for score in local_scores]
+            # RRF has already produced a strong candidate ranking. Reranking fewer
+            # passages cuts hosted latency and lets us fail open if Workers AI is busy.
+            rerank_candidates = candidates[: min(10, len(candidates))]
+            try:
+                scores = self._cloudflare_rerank_scores(query, rerank_candidates)
+                order = sorted(
+                    range(len(rerank_candidates)),
+                    key=lambda idx: scores[idx],
+                    reverse=True,
+                )[: min(k, len(rerank_candidates))]
+                output: list[Document] = []
+                for rank, idx in enumerate(order, start=1):
+                    doc = rerank_candidates[idx]
+                    doc = Document(
+                        page_content=doc.page_content,
+                        metadata=dict(doc.metadata),
+                    )
+                    doc.metadata["rerank_rank"] = rank
+                    doc.metadata["rerank_score"] = float(scores[idx])
+                    doc.metadata["reranker_backend"] = "cloudflare"
+                    output.append(doc)
+                return output
+            except requests.RequestException as exc:
+                fallback_reason = type(exc).__name__
+            except RuntimeError as exc:
+                fallback_reason = type(exc.__cause__ or exc).__name__
 
+            output = []
+            for rank, doc in enumerate(candidates[: min(k, len(candidates))], start=1):
+                cloned = Document(
+                    page_content=doc.page_content,
+                    metadata=dict(doc.metadata),
+                )
+                cloned.metadata["rerank_rank"] = rank
+                cloned.metadata["rerank_score"] = None
+                cloned.metadata["reranker_backend"] = "hybrid-rrf-fallback"
+                cloned.metadata["reranker_fallback_reason"] = fallback_reason
+                output.append(cloned)
+            return output
+
+        pairs = [(query, doc.page_content) for doc in candidates]
+        local_scores = self._get_local_reranker().predict(pairs)
+        scores = [float(score) for score in local_scores]
         order = sorted(
             range(len(candidates)),
             key=lambda idx: scores[idx],
@@ -296,9 +370,7 @@ class SupabaseHybridRetriever:
             doc = Document(page_content=doc.page_content, metadata=dict(doc.metadata))
             doc.metadata["rerank_rank"] = rank
             doc.metadata["rerank_score"] = float(scores[idx])
-            doc.metadata["reranker_backend"] = (
-                "cloudflare" if self.uses_cloudflare_reranker else "local"
-            )
+            doc.metadata["reranker_backend"] = "local"
             output.append(doc)
         return output
 
