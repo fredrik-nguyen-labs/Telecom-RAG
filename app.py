@@ -489,7 +489,8 @@ with left:
 
     observation_mode = st.radio(
         "Observation source",
-        ["Dataset sample", "Enter your own KPIs"],
+        ["Use your own KPIs", "Dataset sample"],
+        index=0,
         horizontal=True,
         help=(
             "Use a real Ericsson/AERPAW row for a reproducible example, or enter your own "
@@ -501,7 +502,7 @@ with left:
         if kpis is None or kpis.empty:
             st.info(
                 "No KPI observations are available in the active backend. "
-                "Use 'Enter your own KPIs' or ask a documentation-only question."
+                "Use 'Use your own KPIs' or ask a documentation-only question."
             )
         else:
             if "anomaly_score" in kpis.columns:
@@ -557,15 +558,15 @@ with left:
 
         custom_left, custom_right = st.columns(2)
         with custom_left:
-            nr_rsrp = st.text_input("NR RSRP (dBm)", placeholder="-95")
-            nr_sinr = st.text_input("NR SINR (dB)", placeholder="10")
-            nr_cqi = st.text_input("NR CQI", placeholder="12")
-            nr_ri = st.text_input("NR RI", placeholder="2")
+            nr_rsrp = st.text_input("NR RSRP (dBm)", value="-95")
+            nr_sinr = st.text_input("NR SINR (dB)", value="10")
+            nr_cqi = st.text_input("NR CQI", value="12")
+            nr_ri = st.text_input("NR RI", value="2")
         with custom_right:
-            lte_rsrp = st.text_input("LTE RSRP (dBm)", placeholder="-90")
-            lte_sinr = st.text_input("LTE SINR (dB)", placeholder="15")
-            nr_mcs = st.text_input("NR MCS", placeholder="18")
-            throughput = st.text_input("Throughput (Mbps)", placeholder="50")
+            lte_rsrp = st.text_input("LTE RSRP (dBm)", value="-90")
+            lte_sinr = st.text_input("LTE SINR (dB)", value="15")
+            nr_mcs = st.text_input("NR MCS", value="18")
+            throughput = st.text_input("Throughput (Mbps)", value="50")
 
         custom_values = {
             "nr_rsrp_dbm": nr_rsrp,
@@ -608,6 +609,9 @@ with right:
         if st.session_state.chat_messages:
             if st.button("New chat", use_container_width=True):
                 st.session_state.chat_messages = []
+                for key in list(st.session_state):
+                    if str(key).startswith("chat_question_"):
+                        del st.session_state[key]
                 st.rerun()
 
     for message in st.session_state.chat_messages:
@@ -619,27 +623,32 @@ with right:
                     message.get("sources", []),
                 )
 
-    if observation_mode == "Enter your own KPIs" and observation:
-        example_q = "What stands out in these values and what should I investigate?"
-    elif observation:
-        example_q = "Why might this observation have this throughput?"
-    else:
-        example_q = "What do RSRP and SINR measure in 5G NR?"
+    default_question = (
+        "Why might this measurement have this throughput, and which radio "
+        "measurements are most relevant to investigate?"
+    )
 
     units_needed = 1
     run_disabled = units_needed > remaining_units
     if run_disabled:
         st.warning("This session has reached its request limit.")
 
-    question = st.chat_input(
-        "Ask a follow-up or a new telecom question",
-        max_chars=MAX_QUESTION_CHARS,
-        disabled=run_disabled,
-    )
-    if not st.session_state.chat_messages:
-        st.caption(f"Try: {example_q}")
-
-run = bool(question)
+    turn_index = len(st.session_state.chat_messages)
+    initial_value = default_question if not st.session_state.chat_messages else ""
+    with st.form("chat_form", clear_on_submit=False):
+        question = st.text_input(
+            "Message",
+            value=initial_value,
+            key=f"chat_question_{turn_index}",
+            max_chars=MAX_QUESTION_CHARS,
+            disabled=run_disabled,
+        )
+        run = st.form_submit_button(
+            "Send",
+            type="primary",
+            use_container_width=True,
+            disabled=run_disabled,
+        )
 
 if run:
     cleaned_question = str(question).strip()
