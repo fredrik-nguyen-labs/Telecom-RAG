@@ -115,7 +115,7 @@ if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = []
 
 
-def _conversation_context(max_messages: int = 4, max_chars_per_message: int = 500) -> str:
+def _conversation_context(max_messages: int = 8, max_chars_per_message: int = 600) -> str:
     """Return a small recent-history window for follow-up questions."""
     lines: list[str] = []
     for message in st.session_state.chat_messages[-max_messages:]:
