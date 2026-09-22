@@ -115,4 +115,4 @@ ranking. Provider/network failures outside that optional rerank step are shown a
 errors rather than silently changing the architecture.
 
 
-The Cloudflare generator/router are invoked with reasoning disabled for the interactive application so requests reliably return visible answer text within the configured output budget.
+The interactive application uses the standard Cloudflare OpenAI-compatible chat request shape used by the last known-good pre-cleanup deployment.
