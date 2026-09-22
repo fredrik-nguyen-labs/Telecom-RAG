@@ -296,6 +296,34 @@ Answer from your pretrained knowledge only. If you are unsure, say so. Do not in
 citations or pretend you consulted documents. Keep the answer concise and technical."""
 
 
+def _extract_token_usage(response: Any) -> dict[str, int]:
+    """Normalize LangChain/OpenAI-compatible token usage without assuming a provider."""
+    usage = getattr(response, "usage_metadata", None) or {}
+    if usage:
+        return {
+            "input_tokens": int(usage.get("input_tokens", 0) or 0),
+            "output_tokens": int(usage.get("output_tokens", 0) or 0),
+            "total_tokens": int(usage.get("total_tokens", 0) or 0),
+        }
+
+    metadata = getattr(response, "response_metadata", None) or {}
+    token_usage = metadata.get("token_usage") or metadata.get("usage") or {}
+    input_tokens = int(
+        token_usage.get("prompt_tokens", token_usage.get("input_tokens", 0)) or 0
+    )
+    output_tokens = int(
+        token_usage.get("completion_tokens", token_usage.get("output_tokens", 0)) or 0
+    )
+    total_tokens = int(
+        token_usage.get("total_tokens", input_tokens + output_tokens) or 0
+    )
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+    }
+
+
 def answer_with_rag(
     llm: BaseChatModel,
     question: str,
@@ -313,7 +341,12 @@ def answer_with_rag(
         [SystemMessage(content=RAG_SYSTEM_PROMPT), HumanMessage(content=user)]
     )
     latency = time.perf_counter() - start
-    return {"answer": str(response.content), "sources": sources, "latency_s": latency}
+    return {
+        "answer": str(response.content),
+        "sources": sources,
+        "latency_s": latency,
+        "llm_usage": _extract_token_usage(response),
+    }
 
 
 def answer_without_rag(
@@ -329,4 +362,9 @@ def answer_without_rag(
         [SystemMessage(content=BASELINE_SYSTEM_PROMPT), HumanMessage(content=user)]
     )
     latency = time.perf_counter() - start
-    return {"answer": str(response.content), "sources": [], "latency_s": latency}
+    return {
+        "answer": str(response.content),
+        "sources": [],
+        "latency_s": latency,
+        "llm_usage": _extract_token_usage(response),
+    }
