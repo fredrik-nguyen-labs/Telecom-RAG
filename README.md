@@ -56,7 +56,7 @@ The experiment contains LTE/NR measurements such as RSRP, SINR, CQI, MCS, RI, ce
 Download/extract it with:
 
 ```bash
-python scripts/download_data.py
+uv run python scripts/download_data.py
 ```
 
 If Dryad rejects the automated request, manually download `Ericsson_Amir.zip` from the DOI page, place it at:
@@ -80,7 +80,7 @@ See [`data/README.md`](data/README.md) for the exact raw files and their roles.
 Run:
 
 ```bash
-python scripts/download_docs.py
+uv run python scripts/download_docs.py
 ```
 
 The corpus currently configures **10 focused sources**:
@@ -104,23 +104,15 @@ See [`docs/SOURCES.md`](docs/SOURCES.md).
 
 Recommended: **Python 3.12**.
 
-Create a virtual environment and install the pinned notebook environment:
+Create the locked environment with `uv`:
 
 ```bash
-python -m venv .venv
-
-# Linux/macOS
-source .venv/bin/activate
-
-# Windows PowerShell
-# .venv\Scripts\Activate.ps1
-
-python -m pip install --upgrade pip
-python -m pip install -r requirements-dev.txt
+uv sync
 ```
 
-`requirements.txt` contains the exact runtime/deployment pins.  
-`requirements-dev.txt` adds the exact Jupyter packages.
+The exact dependency resolution is stored in `uv.lock`. The legacy
+`requirements.txt` and `requirements-dev.txt` files remain available for
+environments that do not use `uv`.
 
 ### Local LLM (free)
 
@@ -151,7 +143,7 @@ The code keeps the LLM provider behind the same LangChain interface, so the RAG 
 Start Jupyter:
 
 ```bash
-jupyter lab
+uv run jupyter lab
 ```
 
 Run in order:
@@ -193,9 +185,9 @@ Explains and performs:
 The same pipeline is exposed through scripts:
 
 ```bash
-python scripts/prepare_kpi_data.py
-python scripts/download_docs.py
-python scripts/build_index.py
+uv run python scripts/prepare_kpi_data.py
+uv run python scripts/download_docs.py
+uv run python scripts/build_index.py
 ```
 
 ## 6. Run the Streamlit app
@@ -203,7 +195,7 @@ python scripts/build_index.py
 Local/Ollama:
 
 ```bash
-streamlit run app.py
+uv run streamlit run app.py
 ```
 
 The app lets you:
@@ -233,7 +225,7 @@ SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
 SUPABASE_PUBLISHABLE_KEY = "sb_publishable_..."
 ```
 
-Seed the database once from a trusted environment with `python scripts/sync_supabase.py`.
+Seed the database once from a trusted environment with `uv run python scripts/sync_supabase.py`.
 The secret key is **not** needed by the public app.
 
 A complete guide is in [`SUPABASE.md`](SUPABASE.md), and the secrets template is at `.streamlit/secrets.toml.example`.
@@ -287,6 +279,8 @@ The included benchmark is intentionally small and hand-auditable. It is meant to
 ```text
 Telecom-RAG/
 ├── app.py
+├── pyproject.toml
+├── uv.lock
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── SUPABASE.md

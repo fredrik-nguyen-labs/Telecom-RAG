@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "telecom-rag"
+version = "0.1.0"
+description = "5G network diagnostics with retrieval-augmented generation"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "numpy==2.5.3",
+    "pandas==3.0.6",
+    "scikit-learn==1.9.1",
+    "matplotlib==3.11.2",
+    "requests==2.34.2",
+    "beautifulsoup4==4.15.0",
+    "pymupdf==1.28.2",
+    "sentence-transformers==6.1.0",
+    "faiss-cpu==1.15.1",
+    "langchain==1.4.2",
+    "langchain-community==0.4.2",
+    "langchain-text-splitters==1.1.2",
+    "langgraph==1.2.11",
+    "langchain-ollama==1.1.0",
+    "langchain-openai==1.6.2",
+    "streamlit==1.64.0",
+    "rank-bm25==0.2.2",
+    "supabase==2.31.0",
+]
+
+[dependency-groups]
+dev = [
+    "jupyterlab==4.6.3",
+    "notebook==7.6.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/telecom_rag"]
+
+[tool.uv]
+default-groups = ["dev"]

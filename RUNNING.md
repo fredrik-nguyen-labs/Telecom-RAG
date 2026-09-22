@@ -9,32 +9,16 @@ git clone https://github.com/fredrik-nguyen-labs/Telecom-RAG.git
 cd Telecom-RAG
 ```
 
-## 2. Create a Python environment
+## 2. Create the locked Python environment
 
 Python **3.12** is recommended.
 
-### Linux / macOS
-
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
+uv sync
 ```
 
-### Windows PowerShell
-
-```powershell
-py -3.12 -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
-Upgrade pip and install the exact notebook/development dependencies:
-
-```bash
-python -m pip install --upgrade pip
-python -m pip install -r requirements-dev.txt
-```
-
-`requirements-dev.txt` includes `requirements.txt` plus Jupyter.
+`uv.lock` records the exact resolution. The requirements files remain available
+for non-uv environments.
 
 ---
 
@@ -43,7 +27,7 @@ python -m pip install -r requirements-dev.txt
 Run:
 
 ```bash
-python scripts/download_data.py
+uv run python scripts/download_data.py
 ```
 
 The project is pinned to:
@@ -70,7 +54,7 @@ data/downloads/Ericsson_Amir.zip
 Then rerun:
 
 ```bash
-python scripts/download_data.py
+uv run python scripts/download_data.py
 ```
 
 ---
@@ -82,7 +66,7 @@ python scripts/download_data.py
 Start Jupyter:
 
 ```bash
-jupyter lab
+uv run jupyter lab
 ```
 
 Open and run:
@@ -114,7 +98,7 @@ data/processed/kpi_observations.csv
 You can create the same processed table without Jupyter:
 
 ```bash
-python scripts/prepare_kpi_data.py
+uv run python scripts/prepare_kpi_data.py
 ```
 
 ---
@@ -124,7 +108,7 @@ python scripts/prepare_kpi_data.py
 Run:
 
 ```bash
-python scripts/download_docs.py
+uv run python scripts/download_docs.py
 ```
 
 The RAG corpus now contains **10 configured sources** covering:
@@ -189,7 +173,7 @@ No API key is needed for the local setup.
 Start Jupyter if it is not already running:
 
 ```bash
-jupyter lab
+uv run jupyter lab
 ```
 
 Open:
@@ -241,7 +225,7 @@ This is optional if Notebook 02 has already built and saved the index.
 Run:
 
 ```bash
-python scripts/build_index.py
+uv run python scripts/build_index.py
 ```
 
 The generated BGE/FAISS index, its chunk snapshot, and a retrieval-configuration manifest are stored in:
@@ -267,7 +251,7 @@ Make sure:
 Then run:
 
 ```bash
-streamlit run app.py
+uv run streamlit run app.py
 ```
 
 Streamlit will print a local URL, normally similar to:
@@ -326,13 +310,13 @@ A template is provided at:
 If you just want the shortest path from a fresh clone to the working demo:
 
 ```bash
-python -m pip install -r requirements-dev.txt
+uv sync
 
-python scripts/download_data.py
-python scripts/prepare_kpi_data.py
+uv run python scripts/download_data.py
+uv run python scripts/prepare_kpi_data.py
 
-python scripts/download_docs.py
-python scripts/build_index.py
+uv run python scripts/download_docs.py
+uv run python scripts/build_index.py
 
 ollama pull qwen3:4b
 ollama serve
@@ -341,7 +325,7 @@ ollama serve
 Then, in another terminal with the same virtual environment:
 
 ```bash
-streamlit run app.py
+uv run streamlit run app.py
 ```
 
 ---
@@ -377,9 +361,9 @@ DEPLOYMENT.md
 If you ran the older MiniLM/four-source version, simply rerun:
 
 ```bash
-python -m pip install -r requirements-dev.txt
-python scripts/download_docs.py
-python scripts/build_index.py
+uv sync
+uv run python scripts/download_docs.py
+uv run python scripts/build_index.py
 ```
 
 The index manifest prevents the application from silently reusing the old MiniLM vectors. Streamlit/bootstrap also refreshes a legacy four-document corpus and rebuilds stale indexes automatically.
@@ -398,8 +382,8 @@ The short version:
 1. Create a Supabase project.
 2. Run `supabase/migrations/20260921130000_init_telecom_rag.sql` in the Supabase SQL Editor.
 3. In a trusted local/admin terminal set the project URL and Supabase secret key.
-4. Run `python scripts/sync_supabase.py`.
-5. For runtime, set `USE_SUPABASE=true`, the project URL, and the Supabase publishable key, then run `streamlit run app.py`.
+4. Run `uv run python scripts/sync_supabase.py`.
+5. For runtime, set `USE_SUPABASE=true`, the project URL, and the Supabase publishable key, then run `uv run streamlit run app.py`.
 
 When Supabase is seeded, the Streamlit sidebar shows `Storage: Supabase Postgres + pgvector`.
 
