@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import math
 import re
 from dataclasses import dataclass
-from typing import Any, Iterable, Protocol
+from typing import Any, Protocol
 
 import numpy as np
 from langchain_core.documents import Document
@@ -84,7 +83,10 @@ class AdvancedRetriever:
         scores = np.asarray(self._bm25.get_scores(tokenize_for_bm25(query)), dtype=float)
         if scores.size == 0:
             return []
-        order = np.argsort(-scores)[: min(k, len(scores))]
+        positive = np.flatnonzero(scores > 0)
+        if positive.size == 0:
+            return []
+        order = positive[np.argsort(-scores[positive])][: min(k, len(positive))]
         docs: list[Document] = []
         for rank, idx in enumerate(order, start=1):
             doc = self.chunks[int(idx)]
