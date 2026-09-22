@@ -256,11 +256,6 @@ def get_llm(
             ),
             temperature=0,
             max_tokens=output_limit,
-            extra_body={
-                "chat_template_kwargs": {
-                    "enable_thinking": False,
-                }
-            },
             timeout=60,
             max_retries=2,
         )
@@ -378,57 +373,6 @@ _SECTION_RE = re.compile(
     r"(Answer|Measured evidence|Observation evidence|Technical interpretation|"
     r"Hypothesis|Hypotheses)\s*:?[ \t]*$"
 )
-_CITATION_RE = re.compile(r"\[S(\d+)\]")
-
-
-def _has_valid_inline_citation(text: str, sources: list[dict[str, Any]]) -> bool:
-    """Return whether the answer cites at least one source that was actually retrieved."""
-    available = {
-        str(source.get("citation"))
-        for source in sources
-        if source.get("citation")
-    }
-    cited = {f"S{match}" for match in _CITATION_RE.findall(text)}
-    return bool(available & cited)
-
-
-def _repair_missing_citations(
-    llm: BaseChatModel,
-    *,
-    question: str,
-    answer_text: str,
-    context: str,
-    sources: list[dict[str, Any]],
-    use_kpi_context: bool,
-) -> str:
-    """Repair citation placement using only the already-retrieved evidence."""
-    valid_ids = ", ".join(str(source["citation"]) for source in sources)
-    kpi_note = (
-        "Do not add citations to user-entered KPI values or deterministic dataset "
-        "statistics themselves. "
-        if use_kpi_context
-        else ""
-    )
-    system = (
-        "You are repairing citations in an already-written telecom answer. "
-        "Preserve the Markdown headings and substance as much as possible. "
-        "Add inline citations immediately after supported technical claims. "
-        f"Use only these source IDs: {valid_ids}. "
-        f"{kpi_note}"
-        "If a technical claim is not supported by the retrieved context, remove it or "
-        "qualify it rather than inventing a citation. Return only the revised answer."
-    )
-    user = (
-        f"Question:\n{question}\n\n"
-        f"Answer to repair:\n{answer_text}\n\n"
-        f"Retrieved technical context:\n{context}"
-    )
-    response = llm.invoke(
-        [SystemMessage(content=system), HumanMessage(content=user)]
-    )
-    return message_text(response.content)
-
-
 def parse_answer_sections(text: str) -> dict[str, str]:
     """Parse the model's stable Markdown section contract for card-based rendering."""
     matches = list(_SECTION_RE.finditer(text))
@@ -464,9 +408,16 @@ def answer_with_rag(
     retrieved_docs: list[Document],
     kpi_context: str = "",
     use_kpi_context: bool = False,
+    conversation_context: str = "",
 ) -> dict[str, Any]:
     context, sources = format_context(retrieved_docs)
     user = f"Question:\n{question}\n\n"
+    if conversation_context.strip():
+        user += (
+            "Recent conversation (only use this to resolve follow-up references; "
+            "technical facts must still come from the retrieved context):\n"
+            f"{conversation_context.strip()}\n\n"
+        )
     if kpi_context:
         user += (
             "KPI context (observation values + dataset-relative statistics; "
@@ -489,18 +440,6 @@ def answer_with_rag(
             "Reasoning is disabled for application calls to prevent hidden reasoning "
             "from consuming the output budget."
         )
-
-    if sources and not _has_valid_inline_citation(answer_text, sources):
-        repaired = _repair_missing_citations(
-            llm,
-            question=question,
-            answer_text=answer_text,
-            context=context,
-            sources=sources,
-            use_kpi_context=use_kpi_context,
-        )
-        if repaired:
-            answer_text = repaired
 
     latency = time.perf_counter() - start
     return {
