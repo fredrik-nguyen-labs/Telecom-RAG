@@ -4,7 +4,7 @@ from langchain_core.documents import Document
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from telecom_rag.rag import CloudflareWorkersAIChat, answer_with_rag, get_llm
+from telecom_rag.rag import CloudflareWorkersAIChat, answer_with_rag, format_context, get_llm
 
 
 class FakeResponse:
@@ -118,6 +118,26 @@ def test_cloudflare_adapter_reports_empty_content_with_finish_reason(monkeypatch
     assert "finish_reason=length" in message
     assert "completion_tokens" in message
 
+
+
+
+def test_format_context_adds_canonical_source_url() -> None:
+    docs = [
+        Document(
+            page_content="NR reference-signal measurement definition.",
+            metadata={
+                "source": "etsi_ts_138215_v18_5_0.pdf",
+                "source_id": "etsi_ts_138215_v18_5_0",
+                "page": 12,
+            },
+        )
+    ]
+
+    _, sources = format_context(docs)
+
+    assert sources[0]["url"].startswith("https://www.etsi.org/")
+    assert "38.215" in sources[0]["title"]
+    assert sources[0]["page"] == 12
 
 def test_answer_with_rag_returns_model_content_and_sources() -> None:
     llm = FakeListChatModel(
