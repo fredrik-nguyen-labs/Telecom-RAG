@@ -29,11 +29,30 @@ jobs:
                   notebook = json.load(handle)
               assert notebook["nbformat"] == 4
               assert notebook["cells"], f"{path} has no cells"
-              print(f"{path}: {len(notebook['cells'])} cells")
+              for i, cell in enumerate(notebook["cells"]):
+                  if cell.get("cell_type") == "code":
+                      assert not cell.get("outputs"), f"{path} cell {i} has committed outputs"
+                      assert cell.get("execution_count") is None, (
+                          f"{path} cell {i} has an execution count"
+                      )
+              print(f"{path}: {len(notebook['cells'])} cells, outputs clean")
 
           with Path("eval/questions.json").open(encoding="utf-8") as handle:
               questions = json.load(handle)
           assert questions, "Evaluation set is empty"
           assert all("question" in item and "reference_answer" in item for item in questions)
           print(f"eval/questions.json: {len(questions)} questions")
+
+          forbidden = [
+              Path(".env"),
+              Path(".streamlit/secrets.toml"),
+              Path("requirements.txt"),
+              Path("requirements-dev.txt"),
+              Path("RUNNING.md"),
+          ]
+          tracked_forbidden = [str(path) for path in forbidden if path.exists()]
+          assert not tracked_forbidden, (
+              "Unexpected public-repo artifacts: " + ", ".join(tracked_forbidden)
+          )
+          print("Repository hygiene checks passed")
           PY
