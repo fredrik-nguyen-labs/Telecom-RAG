@@ -7,12 +7,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
-from sentence_transformers import SentenceTransformer
 
 from .config import (
     BGE_QUERY_PREFIX,
@@ -29,7 +27,6 @@ from .config import (
     RERANKER_MODEL,
     VECTOR_STORE_DIR,
 )
-from .documents import chunk_documents, load_documents
 from .retrieval import AdvancedRetriever
 
 
@@ -41,6 +38,8 @@ class LocalSentenceTransformerEmbeddings(Embeddings):
     """LangChain adapter with retrieval-specific BGE query handling."""
 
     def __init__(self, model_name: str = EMBEDDING_MODEL):
+        from sentence_transformers import SentenceTransformer
+
         self.model_name = model_name
         self.model = SentenceTransformer(model_name)
 
@@ -114,13 +113,18 @@ def load_index_chunks(index_dir: Path = VECTOR_STORE_DIR) -> list[Document]:
         ]
 
     # Backward-compatible fallback for indexes created before chunk persistence.
+    from .documents import chunk_documents, load_documents
+
     return chunk_documents(load_documents())
 
 
 def build_vector_store(
     index_dir: Path = VECTOR_STORE_DIR,
     embedding_model: str = EMBEDDING_MODEL,
-) -> FAISS:
+) -> Any:
+    from langchain_community.vectorstores import FAISS
+    from .documents import chunk_documents, load_documents
+
     docs = load_documents()
     chunks = chunk_documents(docs)
     embeddings = get_embeddings(embedding_model)
@@ -155,7 +159,9 @@ def load_vector_store(
     index_dir: Path = VECTOR_STORE_DIR,
     embedding_model: str = EMBEDDING_MODEL,
     build_if_missing: bool = True,
-) -> FAISS:
+) -> Any:
+    from langchain_community.vectorstores import FAISS
+
     embeddings = get_embeddings(embedding_model)
 
     if index_is_current(index_dir, embedding_model):
