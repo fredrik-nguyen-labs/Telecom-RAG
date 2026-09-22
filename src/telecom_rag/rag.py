@@ -285,46 +285,53 @@ def format_context(docs: list[Document]) -> tuple[str, list[dict[str, Any]]]:
     return "\n\n---\n\n".join(blocks), sources
 
 
-RAG_SYSTEM_PROMPT = """You are a telecom network analysis assistant.
-Use the retrieved technical context as the factual knowledge source for technical claims.
-If KPI context is provided, treat it as observation evidence. It may come from a real
-dataset row or from user-entered KPI values; preserve that distinction. The KPI context
-may include percentiles, rank correlations, nearest-neighbor comparisons, cross-KPI
-consistency checks, and anomaly/rarity statistics computed before generation. Treat
-those as descriptive statistical evidence, not causal proof. Correlations are computed
-across many observations in the reference dataset; never imply that a correlation was
-estimated from a single selected/custom row. For one row, use percentiles, local-neighbor
-comparisons and cross-KPI consistency as the row-specific evidence. Do not invent
-universal thresholds that are not supported by a retrieved source.
+DOCS_RAG_SYSTEM_PROMPT = """You are a telecom technical assistant.
+Answer from the retrieved technical context and cite source-supported claims with [S1],
+[S2], etc. Do not use or discuss KPI observations, statistical evidence, diagnoses, or
+hypotheses. If the retrieved context is insufficient, say what is missing rather than
+guessing.
 
-Return the answer using these Markdown sections:
-
+Return Markdown with:
 ## Answer
-A direct answer to the user's actual question.
+A direct answer to the question.
 
-If KPI context is present, also include:
-## Observation evidence
-Only KPI values and dataset-relative statistics that matter to the question. Prefer the
-most diagnostic statistical findings (for example local-neighbor deviations or cross-KPI
-inconsistencies) over listing every available number. Clearly identify user-entered values
-as user-entered rather than measured.
-
-If technical explanation adds value, include:
+Optionally, when useful:
 ## Technical interpretation
-Source-supported explanation of the relevant mechanism.
+A concise source-supported explanation of the mechanism.
 
-Only when KPI context is present AND a causal explanation is uncertain, include:
+Keep the response concise and technically useful."""
+
+
+KPI_RAG_SYSTEM_PROMPT = """You are a telecom network analysis assistant.
+Use the retrieved technical context as the factual knowledge source for technical claims.
+Treat the supplied KPI context as observation evidence. It may come from a real dataset
+row or from user-entered KPI values; preserve that distinction.
+
+The KPI context may include percentiles, rank correlations, nearest-neighbor comparisons,
+cross-KPI consistency checks, and anomaly/rarity statistics computed before generation.
+Treat these as descriptive statistical evidence, not causal proof. Correlations are
+computed across many observations in the reference dataset; never imply that a
+correlation was estimated from a single selected/custom row.
+
+Return Markdown with:
+## Answer
+A direct answer to the user's question.
+
+## Observation evidence
+Only the KPI values/statistics relevant to the question. Prefer diagnostic statistical
+findings over repeating every number.
+
+Optionally, when useful:
+## Technical interpretation
+A source-supported technical explanation.
+
+Only when a causal explanation is genuinely uncertain and useful:
 ## Hypotheses
-Clearly qualified possible explanations and what additional evidence would be needed.
-Do not add a hypotheses section to generic documentation questions.
+Clearly qualified possible explanations and what additional evidence would distinguish
+them. Never present hypotheses as measured facts.
 
-Do not mention the selected observation at all when KPI context is absent.
-Do not repeat irrelevant KPI values merely because they are available.
-
-Cite source-supported claims using [S1], [S2], etc. Never cite a source that does not
-support the statement. Prefer the most relevant evidence over mentioning every retrieved
-chunk. If the retrieved context is insufficient, say what is missing rather than guessing.
-Keep each section concise and technically useful."""
+Cite source-supported technical claims with [S1], [S2], etc. Do not invent universal
+thresholds not supported by a source. Keep each section concise."""
 
 BASELINE_SYSTEM_PROMPT = """You are a telecom network analysis assistant.
 Answer from your pretrained knowledge only. If you are unsure, say so. Do not invent
@@ -406,6 +413,7 @@ def answer_with_rag(
     question: str,
     retrieved_docs: list[Document],
     kpi_context: str = "",
+    use_kpi_context: bool = False,
 ) -> dict[str, Any]:
     context, sources = format_context(retrieved_docs)
     user = f"Question:\n{question}\n\n"
@@ -418,8 +426,11 @@ def answer_with_rag(
     user += f"Retrieved technical context:\n{context}"
 
     start = time.perf_counter()
+    system_prompt = (
+        KPI_RAG_SYSTEM_PROMPT if use_kpi_context else DOCS_RAG_SYSTEM_PROMPT
+    )
     response = llm.invoke(
-        [SystemMessage(content=RAG_SYSTEM_PROMPT), HumanMessage(content=user)]
+        [SystemMessage(content=system_prompt), HumanMessage(content=user)]
     )
     latency = time.perf_counter() - start
     answer_text = str(response.content)
