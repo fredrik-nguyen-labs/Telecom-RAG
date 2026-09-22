@@ -43,6 +43,25 @@ jobs:
           assert all("question" in item and "reference_answer" in item for item in questions)
           print(f"eval/questions.json: {len(questions)} questions")
 
+          with Path("eval/routing_questions.json").open(encoding="utf-8") as handle:
+              routing_questions = json.load(handle)
+          assert routing_questions, "Routing evaluation set is empty"
+          assert all(
+              {"question", "expected_route", "has_observation"} <= item.keys()
+              for item in routing_questions
+          )
+          print(f"eval/routing_questions.json: {len(routing_questions)} questions")
+
+          generated_results = [
+              path
+              for path in Path("eval/results").iterdir()
+              if path.name != ".gitkeep"
+          ]
+          assert not generated_results, (
+              "Generated eval artifacts must not be committed: "
+              + ", ".join(str(path) for path in generated_results)
+          )
+
           forbidden = [
               Path(".env"),
               Path(".streamlit/secrets.toml"),
