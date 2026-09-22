@@ -1,217 +1,114 @@
-# Deploy Telecom-RAG to Streamlit Community Cloud
+# Streamlit Community Cloud deployment
 
-The recommended hosted architecture is:
+The public demo is designed for a lightweight hosted runtime:
 
 ```text
 Streamlit
-   ↓
-BGE query embedding
-   ↓
-Supabase Postgres
-├── KPI observations
-├── pgvector/HNSW semantic search
-└── Postgres full-text search
-   ↓
-reciprocal-rank fusion
-   ↓
-cross-encoder reranker
-   ↓
-Cloudflare Workers AI
+   |
+   +--> Supabase KPI rows
+   |
+   +--> Cloudflare BGE query embedding
+            |
+            v
+       Supabase hybrid retrieval
+       pgvector + PostgreSQL FTS
+            |
+           RRF
+            |
+       Cloudflare BGE reranker
+            |
+            v
+       Cloudflare LLM
 ```
 
-The local FAISS/BM25 backend remains available as a fallback.
+No local PyTorch, SentenceTransformers, FAISS or scikit-learn model is loaded in the
+hosted Streamlit process.
 
-## 1. Configure Cloudflare Workers AI
+## 1. Prepare Supabase
 
-Create or sign into a Cloudflare account and open **Workers AI -> Use REST API**.
+Follow [SUPABASE.md](SUPABASE.md):
 
-Create a Workers AI API token and copy:
+1. create the project,
+2. run the SQL migration,
+3. seed documents/KPI rows with `scripts/sync_supabase.py`.
 
-```text
-CLOUDFLARE_ACCOUNT_ID
-CLOUDFLARE_API_TOKEN
-```
+## 2. Prepare Cloudflare Workers AI
 
-The default model is:
+Follow [CLOUDFLARE.md](CLOUDFLARE.md) and obtain:
 
-```text
-@cf/meta/llama-3.2-3b-instruct
-```
+- Account ID
+- Workers AI API token
 
-No OpenAI API key is required. See [`CLOUDFLARE.md`](CLOUDFLARE.md) for the full setup.
-
-## 2. Create and seed Supabase
-
-Create a Supabase project.
-
-Then follow [`SUPABASE.md`](SUPABASE.md). The one-time setup is:
-
-1. Open the Supabase SQL Editor.
-2. Run:
-   ```text
-   supabase/migrations/20260921130000_init_telecom_rag.sql
-   ```
-3. In a trusted local/admin environment set the project URL and Supabase secret key.
-4. Run:
-   ```bash
-   python scripts/sync_supabase.py
-   ```
-5. Keep the Supabase Project URL and publishable key for Streamlit.
-
-Do **not** add the Supabase secret/admin key to the public Streamlit deployment.
-
-## 3. Connect Streamlit Community Cloud to GitHub
-
-Go to:
-
-https://share.streamlit.io
-
-Sign in with GitHub and authorize access to:
-
-```text
-fredrik-nguyen-labs/Telecom-RAG
-```
-
-Because the repository is organization-owned and private, make sure Streamlit has access to that organization/repository.
-
-## 4. Create the app
+## 3. Create the Streamlit app
 
 Use:
 
 ```text
-Repository:     fredrik-nguyen-labs/Telecom-RAG
-Branch:         main
-Main file:      deploy/app.py
-Python version: 3.12
+Repository:  fredrik-nguyen-labs/Telecom-RAG
+Branch:      main
+Main file:   deploy/app.py
+Python:      3.12
 ```
 
-Choose an available Streamlit subdomain.
+The `deploy/app.py` entrypoint sets the lightweight hosted mode and runs the root app.
 
-## 5. Add Streamlit secrets
+## 4. Add secrets
 
-In **App settings -> Secrets**, configure:
+In **App settings → Secrets**:
 
 ```toml
 CLOUDFLARE_ACCOUNT_ID = "..."
 CLOUDFLARE_API_TOKEN = "..."
 CLOUDFLARE_MODEL = "@cf/meta/llama-3.2-3b-instruct"
+CLOUDFLARE_EMBEDDING_MODEL = "@cf/baai/bge-small-en-v1.5"
+CLOUDFLARE_RERANKER_MODEL = "@cf/baai/bge-reranker-base"
+USE_CLOUDFLARE_RETRIEVAL = "true"
 
 USE_SUPABASE = "true"
 SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
 SUPABASE_PUBLISHABLE_KEY = "..."
 ```
 
-The checked-in template is:
+Never put the Supabase secret/admin key in the public deployment.
+
+## 5. Verify
+
+The sidebar should show:
 
 ```text
-.streamlit/secrets.toml.example
+Hosted retrieval: Supabase + Cloudflare
+Dense retrieval:   pgvector HNSW
+Lexical retrieval: PostgreSQL FTS
+Fusion:            RRF
+Reranker:          Cloudflare BGE
 ```
 
-The public app needs only the low-privilege Supabase publishable key.
-
-## 6. Deploy
-
-Click **Deploy**.
-
-The `deploy/app.py` entrypoint uses `deploy/requirements.txt`, so Community Cloud does
-**not** install the local research stack (PyTorch, SentenceTransformers, FAISS,
-scikit-learn, PyMuPDF, Jupyter, etc.).
-
-When Supabase is configured and seeded, the Streamlit container reads document chunks,
-vectors, and KPI rows from Supabase. Query embeddings and cross-encoder reranking are
-served by Cloudflare Workers AI, so no local ML model is loaded in Streamlit.
-
-The root `app.py` remains the local-development entrypoint and retains the reproducible
-FAISS/Ollama fallback.
-
-If Supabase is unavailable or not seeded, the app retains the reproducible local FAISS/BM25 fallback.
-
-## 7. Make the app public
-
-After deployment, use the Streamlit sharing/privacy settings to make the app public if desired.
-
-You can keep the GitHub repository private while sharing the deployed app.
-
-## 8. Verify the deployment
-
-The sidebar should show something similar to:
+Test both routes:
 
 ```text
-Hosted LLM configured
-Storage: Supabase Postgres + pgvector
-Current document chunks: <non-zero>
-KPI observations: <non-zero>
-Vector index: ✅ HNSW
+What does RSRP measure?
 ```
 
-Test a documentation question:
+should use the technical-doc route, while an observation-aware diagnostic question should
+use KPI analysis plus documents.
 
-```text
-What do RSRP and SINR measure in a 5G NR network?
-```
+## 6. Updates
 
-Then select a KPI observation and test:
+Streamlit Community Cloud watches the configured branch. Normal pushes to `main` should
+update the app automatically.
 
-```text
-Why might this observation have this throughput, and which radio measurements are most relevant to investigate?
-```
-
-The default retrieval mode should be `reranked`.
-
-## 9. Troubleshooting
-
-### Cloudflare Workers AI error
-
-Check that:
-
-- the Account ID is correct,
-- the API token has Workers AI permissions,
-- the configured model name is valid,
-- the daily free Workers AI allocation has not been exhausted,
-- Cloudflare currently has inference capacity for the model.
-
-### Supabase configured but app uses local storage
-
-Check that:
-
-- the SQL migration ran successfully,
-- `python scripts/sync_supabase.py` completed,
-- `USE_SUPABASE` is true in Streamlit secrets,
-- the Supabase Project URL is correct,
-- the publishable key is correct.
-
-When the app falls back, the sidebar exposes the Supabase status/error.
-
-### Local fallback bootstrap fails
-
-If Supabase is unavailable, the app may try the local corpus/FAISS path. Inspect the bootstrap details and Streamlit logs.
-
-## 10. Updating the deployed app
-
-Streamlit Community Cloud watches the connected `main` branch.
-
-Code changes pushed to `main` update the app automatically.
-
-The lightweight deployment uses `deploy/app.py` as its GitHub entrypoint. Changing an
-already-deployed app from the old root `app.py` coordinate to `deploy/app.py` requires
-a one-time delete/redeploy in Streamlit Community Cloud. After that, normal code changes
-again update automatically.
-
-If the **corpus, chunking, embedding model, or KPI table changes**, rerun:
+If you change the corpus, chunking, embedding model or KPI dataset, also rerun:
 
 ```bash
-python scripts/sync_supabase.py
+uv run python scripts/sync_supabase.py
 ```
 
-so the persistent database matches the new version.
+so Supabase matches the new repository configuration.
 
-## Recommended CV links
+## Hosted failure behavior
 
-Once public:
+The lightweight hosted deployment requires a working seeded Supabase backend.
 
-```text
-Live demo: https://<your-subdomain>.streamlit.app
-GitHub:    https://github.com/fredrik-nguyen-labs/Telecom-RAG
-```
-
-If the GitHub repository stays private, use the live demo link on the CV.
+If Cloudflare reranking alone is slow/unavailable, retrieval falls back to the fused RRF
+ranking. Provider/network failures outside that optional rerank step are shown as request
+errors rather than silently changing the architecture.
