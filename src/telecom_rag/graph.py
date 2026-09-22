@@ -109,12 +109,9 @@ def _docs_only_answer(sections: dict[str, str]) -> tuple[str, dict[str, str]]:
 
     parts: list[str] = []
     if filtered.get("answer"):
-        parts.append(f"## Answer\n{filtered['answer']}")
+        parts.append(filtered["answer"])
     if filtered.get("technical_interpretation"):
-        parts.append(
-            "## Technical interpretation\n"
-            f"{filtered['technical_interpretation']}"
-        )
+        parts.append(filtered["technical_interpretation"])
     return "\n\n".join(parts).strip(), filtered
 
 
