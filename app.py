@@ -785,6 +785,16 @@ if run:
             )
             st.write("Retrieval:", result.get("retrieval_mode", retrieval_mode))
             st.write("Retrieved chunks:", len(sources))
+            provider_metadata = result.get("provider_metadata") or {}
+            if provider_metadata:
+                st.write(
+                    "Model response:",
+                    {
+                        "model": provider_metadata.get("model"),
+                        "finish_reason": provider_metadata.get("finish_reason"),
+                        "usage": provider_metadata.get("usage"),
+                    },
+                )
             st.write(
                 "Latency:",
                 {
