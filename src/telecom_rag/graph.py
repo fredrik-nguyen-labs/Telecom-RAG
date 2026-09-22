@@ -63,6 +63,36 @@ KPI_DIAGNOSTIC_INTENT_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
+KPI_RELATIONSHIP_INTENT_RE = re.compile(
+    r"(?:"
+    r"\b(?:correlations?|correlat(?:e|ed|ion)|relationships?|associations?|patterns?|trends?)\b"
+    r".*\b(?:values?|kpis?|measurements?|observations?|data|rsrp|rsrq|sinr|cqi|mcs|throughput)\b"
+    r"|"
+    r"\b(?:values?|kpis?|measurements?|observations?|data|rsrp|rsrq|sinr|cqi|mcs|throughput)\b"
+    r".*\b(?:correlations?|correlat(?:e|ed|ion)|relationships?|associations?|patterns?|trends?)\b"
+    r")",
+    flags=re.IGNORECASE,
+)
+
+
+def _docs_only_answer(sections: dict[str, str]) -> tuple[str, dict[str, str]]:
+    """Keep only factual docs-only sections and rebuild the raw answer consistently."""
+    filtered: dict[str, str] = {}
+    if sections.get("answer"):
+        filtered["answer"] = sections["answer"]
+    if sections.get("technical_interpretation"):
+        filtered["technical_interpretation"] = sections["technical_interpretation"]
+
+    parts: list[str] = []
+    if filtered.get("answer"):
+        parts.append(f"## Answer\n{filtered['answer']}")
+    if filtered.get("technical_interpretation"):
+        parts.append(
+            "## Technical interpretation\n"
+            f"{filtered['technical_interpretation']}"
+        )
+    return "\n\n".join(parts).strip(), filtered
+
 
 def classify_question_route(question: str, has_observation: bool) -> tuple[str, str]:
     """Return the deterministic route and a human-readable reason.
@@ -86,6 +116,9 @@ def classify_question_route(question: str, has_observation: bool) -> tuple[str, 
 
     if KPI_DIAGNOSTIC_INTENT_RE.search(q):
         return "kpi+docs", "diagnostic KPI question with observation values available"
+
+    if KPI_RELATIONSHIP_INTENT_RE.search(q):
+        return "kpi+docs", "question asks for data relationships/correlations"
 
     return "docs-only", "no diagnostic reference to the available observation"
 
@@ -169,13 +202,14 @@ def build_graph(
         generation_latency_s = float(result.get("latency_s", 0.0))
         retrieval_latency_s = float(state.get("retrieval_latency_s", 0.0))
         if state.get("route") != "kpi+docs":
-            # Hard safety/UX guard: docs-only answers must never surface KPI hypotheses,
-            # even if a small model ignores the formatting instruction.
-            sections = dict(result.get("answer_sections") or {})
-            sections.pop("measured_evidence", None)
-            sections.pop("observation_evidence", None)
-            sections.pop("hypotheses", None)
-            result["answer_sections"] = sections
+            # Hard guard: docs-only output contains only the factual answer and optional
+            # technical interpretation. Rebuild the raw answer too so hidden hypothesis
+            # text cannot leak into citation parsing or fallback rendering.
+            raw_sections = dict(result.get("answer_sections") or {})
+            clean_answer, clean_sections = _docs_only_answer(raw_sections)
+            result["answer_sections"] = clean_sections
+            if clean_answer:
+                result["answer"] = clean_answer
 
         result["generation_latency_s"] = generation_latency_s
         result["retrieval_latency_s"] = retrieval_latency_s
