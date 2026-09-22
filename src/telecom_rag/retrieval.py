@@ -49,7 +49,7 @@ class RetrieverProtocol(Protocol):
 
 
 class AdvancedRetriever:
-    """Dense + BM25 hybrid retrieval with RRF and optional cross-encoder reranking."""
+    """Dense retrieval with cross-encoder reranking and optional BM25/RRF ablations."""
 
     def __init__(
         self,
@@ -60,11 +60,16 @@ class AdvancedRetriever:
         self.dense_store = dense_store
         self.chunks = chunks
         self.reranker_model_name = reranker_model
-        from rank_bm25 import BM25Okapi
-
-        self._tokenized = [tokenize_for_bm25(doc.page_content) for doc in chunks]
-        self._bm25 = BM25Okapi(self._tokenized)
+        self._bm25: Any | None = None
         self._reranker: Any | None = None
+
+    def _get_bm25(self) -> Any:
+        if self._bm25 is None:
+            from rank_bm25 import BM25Okapi
+
+            tokenized = [tokenize_for_bm25(doc.page_content) for doc in self.chunks]
+            self._bm25 = BM25Okapi(tokenized)
+        return self._bm25
 
     def _get_reranker(self) -> Any:
         if self._reranker is None:
@@ -80,7 +85,9 @@ class AdvancedRetriever:
         return docs
 
     def bm25_search(self, query: str, k: int = BM25_CANDIDATES) -> list[Document]:
-        scores = np.asarray(self._bm25.get_scores(tokenize_for_bm25(query)), dtype=float)
+        scores = np.asarray(
+            self._get_bm25().get_scores(tokenize_for_bm25(query)), dtype=float
+        )
         if scores.size == 0:
             return []
         positive = np.flatnonzero(scores > 0)
@@ -162,13 +169,19 @@ class AdvancedRetriever:
         mode = mode.lower()
         if mode == "dense":
             docs = self.dense_search(query, k=k)
+        elif mode == "dense_reranked":
+            candidates = self.dense_search(query, k=RERANK_CANDIDATES)
+            docs = self.rerank(query, candidates, k=k)
         elif mode == "hybrid":
             docs = self.hybrid_candidates(query, candidate_k=k)
         elif mode == "reranked":
+            # Historical hybrid+reranker mode retained for controlled ablations.
             candidates = self.hybrid_candidates(query, candidate_k=RERANK_CANDIDATES)
             docs = self.rerank(query, candidates, k=k)
         else:
-            raise ValueError("mode must be one of: dense, hybrid, reranked")
+            raise ValueError(
+                "mode must be one of: dense, dense_reranked, hybrid, reranked"
+            )
         return RetrievalResult(documents=docs, query=query, mode=mode)
 
 
