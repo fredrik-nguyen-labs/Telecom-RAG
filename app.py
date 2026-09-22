@@ -12,6 +12,7 @@ import streamlit as st
 
 from telecom_rag.bootstrap import ensure_demo_assets
 from telecom_rag.config import (
+    CLOUDFLARE_MODEL,
     MAX_QUESTION_CHARS,
     MAX_REQUEST_UNITS_PER_SESSION,
     MAX_TOP_K_PUBLIC,
@@ -49,6 +50,9 @@ def _read_secret(name: str) -> str | None:
 # Streamlit Community Cloud secrets are copied into environment variables so the
 # rest of the project can use the same code path as local development.
 for secret_name in (
+    "CLOUDFLARE_ACCOUNT_ID",
+    "CLOUDFLARE_API_TOKEN",
+    "CLOUDFLARE_MODEL",
     "OPENAI_API_KEY",
     "OPENAI_MODEL",
     "USE_SUPABASE",
@@ -144,6 +148,9 @@ else:
     kpis = cached_kpis("local") if bootstrap.kpi_ready else None
 
 
+cloudflare_available = bool(
+    os.getenv("CLOUDFLARE_ACCOUNT_ID") and os.getenv("CLOUDFLARE_API_TOKEN")
+)
 openai_available = bool(os.getenv("OPENAI_API_KEY"))
 remaining_units = max(
     0, MAX_REQUEST_UNITS_PER_SESSION - st.session_state.request_units_used
@@ -153,18 +160,34 @@ remaining_units = max(
 with st.sidebar:
     st.header("Demo controls")
 
-    if openai_available:
+    if cloudflare_available:
+        provider = "cloudflare"
+        model = os.getenv("CLOUDFLARE_MODEL", CLOUDFLARE_MODEL)
+        st.success("Free hosted LLM configured")
+        st.caption(f"Provider: Cloudflare Workers AI · Model: {model}")
+    elif openai_available:
         provider = "openai"
         model = os.getenv("OPENAI_MODEL", OPENAI_MODEL)
         st.success("Hosted LLM configured")
         st.caption(f"Provider: OpenAI · Model: {model}")
     else:
-        provider = st.selectbox("LLM provider", ["ollama", "openai"], index=0)
+        provider = st.selectbox(
+            "LLM provider", ["ollama", "cloudflare", "openai"], index=0
+        )
         if provider == "ollama":
             model = st.text_input(
                 "Ollama model", value=os.getenv("OLLAMA_MODEL", OLLAMA_MODEL)
             )
             st.caption("Local/free. Start Ollama before running the app.")
+        elif provider == "cloudflare":
+            model = st.text_input(
+                "Cloudflare model",
+                value=os.getenv("CLOUDFLARE_MODEL", CLOUDFLARE_MODEL),
+            )
+            st.warning(
+                "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN to use "
+                "Workers AI."
+            )
         else:
             model = st.text_input(
                 "OpenAI model", value=os.getenv("OPENAI_MODEL", OPENAI_MODEL)
@@ -198,8 +221,8 @@ with st.sidebar:
     st.metric("Request units left in this session", remaining_units)
     st.caption(
         "One answer = 1 unit. Enabling the baseline comparison uses 2 units. "
-        "This browser-session limit is a convenience guardrail; the API project's "
-        "hard spend limit is the real billing protection."
+        "This is a browser-session convenience guardrail. Cloudflare Workers AI's "
+        "free allocation is enforced separately by Cloudflare."
     )
 
     st.divider()
@@ -443,9 +466,9 @@ if run:
 
     except Exception as exc:
         st.error(
-            "The request failed. Common hosted causes are an exhausted LLM API balance, "
-            "an OpenAI spend limit, missing Supabase migration/data, or a temporary "
-            "provider error."
+            "The request failed. Common causes are an unavailable local Ollama server, "
+            "a Cloudflare Workers AI token/quota/capacity issue, missing Supabase "
+            "migration/data, or a temporary provider error."
         )
         with st.expander("Technical error"):
             st.exception(exc)
