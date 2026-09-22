@@ -132,7 +132,7 @@ uv run jupyter lab
 Run:
 
 1. [01_data_processing_and_eda.ipynb](notebooks/01_data_processing_and_eda.ipynb)
-2. [02_rag_demo_and_evaluation.ipynb](notebooks/02_rag_demo_and_evaluation.ipynb)
+2. [02_rag_evaluation.ipynb](notebooks/02_rag_evaluation.ipynb)
 
 ## Deployment
 
