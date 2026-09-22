@@ -646,14 +646,36 @@ with st.sidebar:
             - NR data procedures and architecture,
             - the exact AERPAW Ericsson experiment,
             - Ericsson material on beamforming, coverage/capacity and network performance.
-
-            **Retrieval:** BGE dense retrieval + lexical retrieval + reciprocal-rank fusion
-            + cross-encoder reranking.
-
-            **Storage:** Supabase/Postgres + pgvector in the hosted configuration, with
-            local FAISS/BM25 retained as the notebook/development baseline.
             """
         )
+        if using_supabase:
+            st.markdown(
+                """
+                **Hosted retrieval path**
+                1. Cloudflare BGE creates the query embedding.
+                2. Supabase retrieves semantic candidates with pgvector/HNSW.
+                3. PostgreSQL full-text search retrieves lexical candidates.
+                4. Reciprocal-rank fusion combines the dense and FTS rankings.
+                5. Cloudflare BGE reranks the fused candidates when available.
+                6. If hosted reranking is slow or unavailable, the app uses the fused RRF
+                   ranking directly rather than failing the request.
+
+                **Important:** the hosted lexical retriever is PostgreSQL FTS, **not BM25**.
+                """
+            )
+        else:
+            st.markdown(
+                """
+                **Local/notebook retrieval path**
+                1. BGE + FAISS dense retrieval.
+                2. BM25 lexical retrieval.
+                3. Reciprocal-rank fusion.
+                4. Local cross-encoder reranking.
+
+                This local path is retained as the reproducible development/evaluation
+                baseline.
+                """
+            )
 
 
 observation = None
