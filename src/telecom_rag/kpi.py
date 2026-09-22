@@ -82,7 +82,12 @@ def summarize_observation(row: pd.Series, reference_df: pd.DataFrame) -> str:
     This intentionally avoids hard-coded 'good/bad' radio thresholds. Statements are
     relative to the measured dataset, making the analysis reproducible and defensible.
     """
-    lines = ["Selected network observation (measured data):"]
+    is_user_entered = str(row.get("observation_source", "")) == "user-entered"
+    lines = [
+        "Selected KPI observation (user-entered values):"
+        if is_user_entered
+        else "Selected network observation (measured data):"
+    ]
     if "observation_id" in row and pd.notna(row["observation_id"]):
         lines.append(f"- observation_id: {row['observation_id']}")
     if "timestamp" in row and pd.notna(row["timestamp"]):
