@@ -108,8 +108,9 @@ if "request_units_used" not in st.session_state:
 
 st.title("📡 5G Network Diagnostics RAG Assistant")
 st.caption(
-    "Real Ericsson/AERPAW KPI measurements + LangGraph + hybrid retrieval + "
-    "Supabase/pgvector or local FAISS + grounded LLM answers."
+    "Real Ericsson/AERPAW KPI measurements + LangGraph + grounded hybrid RAG. "
+    "Hosted: Supabase pgvector + PostgreSQL FTS + RRF. "
+    "Local/notebooks: FAISS + BM25 + RRF."
 )
 
 
@@ -964,9 +965,16 @@ if run:
                 ):
                     details = []
                     if source.get("retrieval_methods"):
-                        details.append(
-                            f"retrieved by {source['retrieval_methods']}"
-                        )
+                        method_label = str(source["retrieval_methods"])
+                        if using_supabase:
+                            method_label = method_label.replace(
+                                "dense+fts", "dense + PostgreSQL FTS"
+                            ).replace("fts", "PostgreSQL FTS")
+                        else:
+                            method_label = method_label.replace(
+                                "dense+bm25", "dense + BM25"
+                            ).replace("bm25", "BM25")
+                        details.append(f"retrieved by {method_label}")
                     if source.get("rerank_score") is not None:
                         details.append(
                             f"rerank score {source['rerank_score']:.3f}"
