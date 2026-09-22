@@ -57,6 +57,17 @@ Important:
   choose KPI.
 - If the user is asking how two telecom concepts generally relate in theory, choose DOCS.
 
+Examples of intent:
+- "What do these measurements tell us?" -> KPI
+- "Is anything unusual about the supplied observation?" -> KPI
+- "What relationships are visible in the values I gave you?" -> KPI
+- "Based on this measurement, what should I investigate?" -> KPI
+- "What does RSRP mean?" -> DOCS
+- "Why can SINR affect throughput in general?" -> DOCS
+- "How does CQI influence MCS conceptually?" -> DOCS
+
+These examples illustrate intent; do not match phrases mechanically.
+
 Return exactly one token: KPI or DOCS.
 """
 
@@ -109,6 +120,7 @@ def _docs_only_answer(sections: dict[str, str]) -> tuple[str, dict[str, str]]:
 def build_graph(
     llm: BaseChatModel,
     retriever: RetrieverProtocol,
+    router_llm: BaseChatModel | None = None,
     reference_df: pd.DataFrame | None = None,
     top_k: int = 4,
     retrieval_mode: str = "reranked",
@@ -119,6 +131,8 @@ def build_graph(
     numeric KPI context is kept for generation. This avoids polluting the embedding query
     with percentiles, timestamps, anomaly scores and raw values.
     """
+
+    routing_model = router_llm or llm
 
     def route_node(state: AppState) -> AppState:
         observation = state.get("observation")
@@ -135,7 +149,7 @@ def build_graph(
         )
         started = time.perf_counter()
         try:
-            response = llm.invoke(
+            response = routing_model.invoke(
                 [
                     SystemMessage(content=ROUTER_SYSTEM_PROMPT),
                     HumanMessage(content=user_prompt),
