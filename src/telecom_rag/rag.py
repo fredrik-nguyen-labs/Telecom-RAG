@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import time
 from pathlib import Path
 from typing import Any
@@ -11,7 +10,6 @@ import numpy as np
 import requests
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from .config import (
@@ -25,7 +23,6 @@ from .config import (
     EMBEDDING_MODEL,
     MAX_OUTPUT_TOKENS,
     OLLAMA_MODEL,
-    OPENAI_MODEL,
     RERANKER_MODEL,
     VECTOR_STORE_DIR,
 )
@@ -361,19 +358,7 @@ def get_llm(
             or os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_GENERATOR_MODEL),
             max_output_tokens=output_limit,
         )
-    if provider == "openai":
-        if not os.getenv("OPENAI_API_KEY"):
-            raise RuntimeError("OPENAI_API_KEY is not set.")
-        from langchain_openai import ChatOpenAI
-
-        return ChatOpenAI(
-            model=model or OPENAI_MODEL,
-            temperature=0,
-            max_tokens=MAX_OUTPUT_TOKENS,
-            timeout=45,
-            max_retries=1,
-        )
-    raise ValueError("provider must be 'ollama', 'cloudflare', or 'openai'")
+    raise ValueError("provider must be 'ollama' or 'cloudflare'")
 
 
 def format_context(docs: list[Document]) -> tuple[str, list[dict[str, Any]]]:
@@ -440,44 +425,8 @@ Answer directly in 1-3 short paragraphs. Do not use section headings. If unsure,
 Do not invent citations or pretend you consulted documents."""
 
 
-_SECTION_RE = re.compile(
-    r"(?im)^\s*(?:#{1,6}\s*)?"
-    r"(Answer|Measured evidence|Observation evidence|Technical interpretation|"
-    r"Hypothesis|Hypotheses)\s*:?[ \t]*$"
-)
-
-
-def parse_answer_sections(text: str) -> dict[str, str]:
-    """Parse the model's stable Markdown section contract for card-based rendering."""
-    matches = list(_SECTION_RE.finditer(text))
-    if not matches:
-        return {"answer": text.strip()} if text.strip() else {}
-
-    key_map = {
-        "answer": "answer",
-        "measured evidence": "observation_evidence",
-        "observation evidence": "observation_evidence",
-        "technical interpretation": "technical_interpretation",
-        "hypothesis": "hypotheses",
-        "hypotheses": "hypotheses",
-    }
-    sections: dict[str, str] = {}
-    for idx, match in enumerate(matches):
-        start = match.end()
-        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
-        content = text[start:end].strip()
-        if content:
-            sections[key_map[match.group(1).lower()]] = content
-
-    # If the model accidentally emitted prose before the first heading, keep it visible.
-    preamble = text[: matches[0].start()].strip()
-    if preamble and "answer" not in sections:
-        sections["answer"] = preamble
-    return sections
-
-
 def answer_with_rag(
-    llm: BaseChatModel,
+    llm: Any,
     question: str,
     retrieved_docs: list[Document],
     kpi_context: str = "",
@@ -510,7 +459,6 @@ def answer_with_rag(
         )
     return {
         "answer": answer_text,
-        "answer_sections": parse_answer_sections(answer_text),
         "sources": sources,
         "latency_s": latency,
         "provider_metadata": provider_metadata,
@@ -518,7 +466,7 @@ def answer_with_rag(
 
 
 def answer_without_rag(
-    llm: BaseChatModel,
+    llm: Any,
     question: str,
     kpi_context: str = "",
 ) -> dict[str, Any]:
