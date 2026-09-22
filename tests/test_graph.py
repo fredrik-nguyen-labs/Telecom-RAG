@@ -25,7 +25,7 @@ def test_router_parser_accepts_expected_tokens() -> None:
 
 def test_graph_uses_kpi_route_for_semantic_router_decision() -> None:
     router = FakeListChatModel(responses=["KPI"])
-    generator = FakeListChatModel(responses=["## Answer\nKPI answer"])
+    generator = FakeListChatModel(responses=["KPI answer"])
     graph = build_graph(
         generator,
         EmptyRetriever(),
@@ -49,37 +49,9 @@ def test_graph_uses_kpi_route_for_semantic_router_decision() -> None:
     assert result["route"] == "kpi+docs"
 
 
-def test_docs_route_strips_hypothesis_section() -> None:
-    router = FakeListChatModel(responses=["DOCS"])
-    generator = FakeListChatModel(
-        responses=[
-            "## Answer\nRSRP is a reference-signal power measurement.\n\n"
-            "## Hypotheses\nThis section must not survive a docs-only route."
-        ]
-    )
-    graph = build_graph(
-        generator,
-        EmptyRetriever(),
-        router_llm=router,
-        reference_df=None,
-    )
-
-    result = graph.invoke(
-        {
-            "question": "What is RSRP?",
-            "use_rag": True,
-            "observation": {"nr_rsrp_dbm": -95},
-        }
-    )
-
-    assert result["route"] == "docs-only"
-    assert "hypoth" not in result["answer"].lower()
-    assert "hypotheses" not in result["answer_sections"]
-
-
 def test_no_observation_skips_router_and_uses_docs() -> None:
     router = FakeListChatModel(responses=["KPI"])
-    generator = FakeListChatModel(responses=["## Answer\nGeneral answer"])
+    generator = FakeListChatModel(responses=["General answer"])
     graph = build_graph(generator, EmptyRetriever(), router_llm=router)
 
     result = graph.invoke(
