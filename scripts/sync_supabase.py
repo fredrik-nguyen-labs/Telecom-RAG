@@ -29,9 +29,8 @@ def main() -> None:
 
     if not supabase_admin_configured():
         raise SystemExit(
-            "Set SUPABASE_URL and SUPABASE_SECRET_KEY before running this script "
-            "(legacy SUPABASE_SERVICE_ROLE_KEY also works). The secret key is only for "
-            "this trusted sync step; do not put it in "
+            "Set SUPABASE_URL and SUPABASE_SECRET_KEY before running this script. "
+            "The secret key is only for this trusted sync step; do not put it in "
             "the public Streamlit app."
         )
 
