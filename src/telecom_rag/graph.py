@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any, Literal, TypedDict
 
 import pandas as pd
@@ -22,6 +23,9 @@ class AppState(TypedDict, total=False):
     answer: str
     sources: list[dict[str, Any]]
     latency_s: float
+    retrieval_latency_s: float
+    generation_latency_s: float
+    total_latency_s: float
     llm_usage: dict[str, int]
     route: str
 
@@ -71,12 +75,16 @@ def build_graph(
                 "retrieval_query": query,
                 "retrieval_mode": retrieval_mode,
                 "retrieved_docs": [],
+                "retrieval_latency_s": 0.0,
             }
+        started = time.perf_counter()
         result = retriever.retrieve(query, k=top_k, mode=retrieval_mode)
+        retrieval_latency_s = time.perf_counter() - started
         return {
             "retrieval_query": result.query,
             "retrieval_mode": result.mode,
             "retrieved_docs": result.documents,
+            "retrieval_latency_s": retrieval_latency_s,
         }
 
     def generate_node(state: AppState) -> AppState:
@@ -93,6 +101,14 @@ def build_graph(
                 state["question"],
                 state.get("kpi_context", ""),
             )
+
+        generation_latency_s = float(result.get("latency_s", 0.0))
+        retrieval_latency_s = float(state.get("retrieval_latency_s", 0.0))
+        result["generation_latency_s"] = generation_latency_s
+        result["retrieval_latency_s"] = retrieval_latency_s
+        result["total_latency_s"] = retrieval_latency_s + generation_latency_s
+        # Keep latency_s for UI/backward compatibility, now as end-to-end RAG latency.
+        result["latency_s"] = result["total_latency_s"]
         return result
 
     builder = StateGraph(AppState)
