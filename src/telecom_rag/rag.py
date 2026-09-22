@@ -291,8 +291,11 @@ If KPI context is provided, treat it as observation evidence. It may come from a
 dataset row or from user-entered KPI values; preserve that distinction. The KPI context
 may include percentiles, rank correlations, nearest-neighbor comparisons, cross-KPI
 consistency checks, and anomaly/rarity statistics computed before generation. Treat
-those as descriptive statistical evidence, not causal proof. Do not invent universal
-thresholds that are not supported by a retrieved source.
+those as descriptive statistical evidence, not causal proof. Correlations are computed
+across many observations in the reference dataset; never imply that a correlation was
+estimated from a single selected/custom row. For one row, use percentiles, local-neighbor
+comparisons and cross-KPI consistency as the row-specific evidence. Do not invent
+universal thresholds that are not supported by a retrieved source.
 
 Return the answer using these Markdown sections:
 
@@ -329,7 +332,9 @@ citations or pretend you consulted documents. Keep the answer concise and techni
 
 
 _SECTION_RE = re.compile(
-    r"(?im)^##\s+(Answer|Measured evidence|Observation evidence|Technical interpretation|Hypotheses)\s*$"
+    r"(?im)^\\s*(?:#{1,6}\\s*)?"
+    r"(Answer|Measured evidence|Observation evidence|Technical interpretation|"
+    r"Hypothesis|Hypotheses)\\s*:?[ \\t]*$"
 )
 
 
@@ -344,6 +349,7 @@ def parse_answer_sections(text: str) -> dict[str, str]:
         "measured evidence": "observation_evidence",
         "observation evidence": "observation_evidence",
         "technical interpretation": "technical_interpretation",
+        "hypothesis": "hypotheses",
         "hypotheses": "hypotheses",
     }
     sections: dict[str, str] = {}
