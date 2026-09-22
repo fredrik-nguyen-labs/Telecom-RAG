@@ -81,9 +81,10 @@ def _observation_schema(observation: dict[str, Any] | None) -> str:
 
 def _parse_router_response(content: Any) -> tuple[str, str] | None:
     text = str(content).strip().upper()
-    if text == "KPI":
+    first_token = text.split(maxsplit=1)[0].strip("`*_:#.,") if text else ""
+    if first_token == "KPI":
         return "kpi+docs", "semantic router selected KPI/data analysis"
-    if text == "DOCS":
+    if first_token == "DOCS":
         return "docs-only", "semantic router selected technical-document analysis"
     return None
 
@@ -137,8 +138,7 @@ def build_graph(
         )
         started = time.perf_counter()
         try:
-            router_llm = llm.bind(max_tokens=4)
-            response = router_llm.invoke(
+            response = llm.invoke(
                 [
                     SystemMessage(content=ROUTER_SYSTEM_PROMPT),
                     HumanMessage(content=user_prompt),
@@ -210,6 +210,7 @@ def build_graph(
                 state["question"],
                 state.get("retrieved_docs", []),
                 state.get("kpi_context", ""),
+                use_kpi_context=state.get("route") == "kpi+docs",
             )
         else:
             result = answer_without_rag(
@@ -222,9 +223,8 @@ def build_graph(
         retrieval_latency_s = float(state.get("retrieval_latency_s", 0.0))
         router_latency_s = float(state.get("router_latency_s", 0.0))
         if state.get("route") != "kpi+docs":
-            # Hard guard: docs-only output contains only the factual answer and optional
-            # technical interpretation. Rebuild the raw answer too so hidden hypothesis
-            # text cannot leak into citation parsing or fallback rendering.
+            # Defensive fallback only; docs-only generation already uses a dedicated
+            # prompt that never requests KPI evidence or hypotheses.
             raw_sections = dict(result.get("answer_sections") or {})
             clean_answer, clean_sections = _docs_only_answer(raw_sections)
             result["answer_sections"] = clean_sections
