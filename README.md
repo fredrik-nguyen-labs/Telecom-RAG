@@ -2,47 +2,52 @@
 
 A portfolio project for **5G network diagnostics with Retrieval-Augmented Generation (RAG)**.
 
-The project combines:
+The project combines real Ericsson/AERPAW 5G NSA measurements with reproducible statistical analysis, hybrid document retrieval, LangGraph orchestration, and grounded LLM explanations.
 
-- real Ericsson/AERPAW 5G NSA KPI measurements,
-- reproducible pandas/scikit-learn analysis,
-- public telecom standards/documentation,
-- BGE retrieval embeddings,
-- FAISS/BM25 local retrieval for notebooks,
-- Supabase Postgres + pgvector for hosted persistence/retrieval,
-- reciprocal-rank fusion + cross-encoder reranking,
-- LangChain components,
-- LangGraph orchestration,
-- the same LLM **with vs without RAG** evaluation,
-- a Streamlit demo.
+## What the project does
 
-For local setup and the exact run order, see **[RUNNING.md](RUNNING.md)**. For Supabase setup, see **[SUPABASE.md](SUPABASE.md)**. For the free hosted LLM, see **[CLOUDFLARE.md](CLOUDFLARE.md)**. For the public Streamlit deployment, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+A user can either select a real measurement from the Ericsson/AERPAW dataset or enter their own KPI values, then ask a natural-language question.
 
-The central idea is deliberately simple:
+The workflow decides semantically whether the question needs:
+
+- **technical documents only**, or
+- **KPI/data analysis + technical documents**.
+
+For KPI-aware questions, the application computes statistical evidence first and gives that evidence to the LLM alongside retrieved telecom documentation.
 
 ```text
-KPI measurements                    Technical documents
-(the case to diagnose)              (knowledge used to explain it)
-       |                                      |
-       v                                      v
-pandas / anomaly analysis       section-aware chunking
-                                      |
-                              BGE dense + BM25
-                                      |
-                              RRF + cross-encoder
-       |                                      |
-       +------------------+-------------------+
-                          v
-                       LangGraph
-                          |
-                          v
-                         LLM
-                          |
-                          v
-              explanation + source citations
+                           User question
+                                |
+                                v
+                      Semantic intent router
+                        /               \
+                       /                 \
+              technical docs        KPI + technical docs
+                    |                     |
+                    |             statistical KPI analysis
+                    |                     |
+                    +----------+----------+
+                               |
+                         hybrid retrieval
+                               |
+                      grounded generation
+                               |
+                               v
+                  answer + evidence + citations
 ```
 
-## 1. Data
+The application intentionally separates:
+
+1. **measured/user-entered observations**,
+2. **statistics computed from the reference dataset**,
+3. **technical facts retrieved from documentation**, and
+4. **qualified hypotheses**.
+
+That separation makes it easier to inspect which claims came from data versus documentation versus model reasoning.
+
+---
+
+## Data
 
 The KPI side is pinned to the public Dryad release:
 
@@ -51,31 +56,62 @@ DOI: https://doi.org/10.5061/dryad.wh70rxx06
 Version: **May 21, 2025**  
 Archive: **Ericsson_Amir.zip**
 
-The experiment contains LTE/NR measurements such as RSRP, SINR, CQI, MCS, RI, cell IDs, throughput and UAV geolocation for two yaw orientations.
+The experiment includes LTE/NR measurements such as:
 
-Download/extract it with:
+- RSRP
+- SINR
+- CQI
+- MCS
+- rank indicator (RI)
+- throughput
+- cell IDs
+- UAV position/orientation metadata
+
+Download and extract the dataset with:
 
 ```bash
 uv run python scripts/download_data.py
 ```
 
-If Dryad rejects the automated request, manually download `Ericsson_Amir.zip` from the DOI page, place it at:
-
-```text
-data/downloads/Ericsson_Amir.zip
-```
-
-and rerun the script.
-
-The processing notebook aligns the separate KPI streams by timestamp and writes:
+The processed observation table is written to:
 
 ```text
 data/processed/kpi_observations.csv
 ```
 
-See [`data/README.md`](data/README.md) for the exact raw files and their roles.
+See [data/README.md](data/README.md) for the expected source files.
 
-## 2. RAG corpus
+---
+
+## KPI analytics
+
+The KPI branch does more than display raw values.
+
+For a selected or user-entered observation, it can compute:
+
+- per-KPI **dataset percentiles**,
+- **rank correlations** across the reference dataset,
+- **nearest-neighbor comparisons** using similar radio conditions,
+- **expected-vs-actual throughput** relative to similar observations,
+- **cross-KPI consistency** checks,
+- a **multivariate rarity** score,
+- existing **Isolation Forest anomaly** information for processed dataset rows.
+
+These statistics are descriptive evidence, not universal telecom thresholds and not proof of causality.
+
+For example, the system can distinguish between:
+
+> throughput is low overall
+
+and the more informative:
+
+> throughput is also unusually low compared with measurements that have similar RSRP, SINR, CQI, MCS and RI.
+
+The deterministic statistics are shown separately in the Streamlit UI so they can be inspected independently of the LLM answer.
+
+---
+
+## RAG corpus
 
 Run:
 
@@ -83,221 +119,249 @@ Run:
 uv run python scripts/download_docs.py
 ```
 
-The corpus currently configures **10 focused sources**:
+The configured corpus contains 10 focused public sources, including:
 
 - ETSI / 3GPP TS 38.215 — NR physical-layer measurements
 - ETSI / 3GPP TS 38.214 — NR physical-layer procedures for data
 - ETSI / 3GPP TS 38.300 — NR / NG-RAN overall description
 - ETSI / 3GPP TS 36.214 — LTE physical-layer measurements
-- AERPAW Ericsson dataset description
-- AERPAW Ericsson post-processing documentation
-- Ericsson material on Massive MIMO / beamforming
-- Ericsson traffic-pattern and capacity/coverage analysis
-- Ericsson network-performance optimization material
-- Ericsson Mobility Report June 2025
+- AERPAW Ericsson dataset material
+- Ericsson material on beamforming, coverage/capacity and network performance
+- Ericsson Mobility Report material
 
-Downloaded third-party files are excluded from Git; the URLs and download script are committed for reproducibility.
+Downloaded third-party files are excluded from Git. Source URLs and download logic are committed for reproducibility.
 
-See [`docs/SOURCES.md`](docs/SOURCES.md).
+See [docs/SOURCES.md](docs/SOURCES.md).
 
-## 3. Exact environment
+---
+
+## Retrieval architecture
+
+The project deliberately keeps a reproducible local retrieval path and a lightweight hosted path.
+
+### Hosted Streamlit deployment
+
+```text
+query
+  |
+Cloudflare BGE query embedding
+  |
+  +-------------------------------+
+  |                               |
+Supabase pgvector/HNSW      PostgreSQL full-text search
+  |                               |
+  +---------------+---------------+
+                  |
+                 RRF
+                  |
+      Cloudflare BGE reranker
+                  |
+             final top-k
+```
+
+Hosted models:
+
+- query embeddings: `@cf/baai/bge-small-en-v1.5`
+- reranker: `@cf/baai/bge-reranker-base`
+- generation default: `@cf/meta/llama-3.2-3b-instruct`
+
+If the hosted reranker is busy or times out, the application falls back to the already-fused RRF ranking instead of failing the request.
+
+The hosted lexical retriever is **PostgreSQL full-text search, not BM25**.
+
+### Local / notebook retrieval
+
+```text
+BGE + FAISS dense retrieval
+          +
+      BM25 lexical retrieval
+          |
+         RRF
+          |
+cross-encoder/ms-marco-MiniLM-L6-v2
+          |
+       final top-k
+```
+
+This path is useful for local development and controlled retrieval ablations.
+
+---
+
+## LangGraph orchestration
+
+The graph contains a real conditional workflow rather than always injecting the selected KPI row.
+
+```text
+START
+  |
+semantic route
+  |---------------------------|
+  |                           |
+docs-only                  KPI + docs
+  |                           |
+  |                      analyze KPIs
+  |                           |
+  +----------> retrieve <------+
+                 |
+              generate
+                 |
+                END
+```
+
+The router uses semantic intent classification rather than hard-coded keyword routing.
+
+Examples:
+
+- `What does RSRP mean?` → technical documents only
+- `How are SINR and CQI related in theory?` → technical documents only
+- `What stands out in these values?` → KPI + documents
+- `What relationships do you see in the supplied data?` → KPI + documents
+
+The two routes also use separate generation prompts. Documentation-only answers do not request KPI evidence or hypotheses.
+
+---
+
+## Environment
 
 Recommended: **Python 3.12**.
 
-Create the locked environment with `uv`:
+Install the locked environment with:
 
 ```bash
 uv sync
 ```
 
-The exact dependency resolution is stored in `uv.lock`. The legacy
-`requirements.txt` and `requirements-dev.txt` files remain available for
-environments that do not use `uv`.
+The exact dependency resolution is stored in `uv.lock`.
 
-### Local LLM (free)
+### Local LLM
 
-The default development model is **Qwen3 4B through Ollama**.
-
-Install Ollama separately, then:
+The default local development model is Qwen3 4B through Ollama.
 
 ```bash
 ollama pull qwen3:4b
 ollama serve
 ```
 
-No LLM API key is needed for local use.
+### Cloudflare Workers AI
 
-### Hosted LLM
-
-The recommended public deployment uses **Cloudflare Workers AI** with Llama 3.2 3B:
+For hosted inference:
 
 ```text
 CLOUDFLARE_ACCOUNT_ID=...
 CLOUDFLARE_API_TOKEN=...
 CLOUDFLARE_MODEL=@cf/meta/llama-3.2-3b-instruct
+CLOUDFLARE_EMBEDDING_MODEL=@cf/baai/bge-small-en-v1.5
+CLOUDFLARE_RERANKER_MODEL=@cf/baai/bge-reranker-base
+USE_CLOUDFLARE_RETRIEVAL=true
 ```
 
-OpenAI remains an optional fallback, but it is not required for the public demo. The
-provider stays behind the same LangChain interface, so the RAG pipeline does not change.
+OpenAI is optional and is not required for the public demo.
 
-## 4. Run the notebooks
+---
 
-Start Jupyter:
+## Run locally
 
-```bash
-uv run jupyter lab
-```
-
-Run in order:
-
-### [`notebooks/01_data_processing_and_eda.ipynb`](notebooks/01_data_processing_and_eda.ipynb)
-
-Explains and performs:
-
-- raw file discovery,
-- robust timestamp parsing,
-- nearest-time KPI alignment,
-- missing-data inspection,
-- KPI distributions/correlations,
-- Isolation Forest anomaly scoring,
-- creation of the final observation table.
-
-### [`notebooks/02_rag_demo_and_evaluation.ipynb`](notebooks/02_rag_demo_and_evaluation.ipynb)
-
-Explains and performs:
-
-- document loading and PDF extraction,
-- section-aware contextual chunking,
-- BGE retrieval embeddings,
-- FAISS dense search,
-- BM25 lexical search,
-- reciprocal-rank fusion,
-- cross-encoder reranking,
-- dense vs hybrid vs reranked retrieval ablation,
-- LangGraph workflow construction,
-- documentation-only questions,
-- KPI-aware questions,
-- source hit/recall/precision and MRR evaluation,
-- a 20-question benchmark split into general, corpus-specific, applied-diagnostic and cross-source categories,
-- **same LLM: LLM-only vs final reranked RAG** comparison,
-- semantic similarity, required-fact recall, citation validity, context-support proxy and latency analysis.
-
-## 5. Run without notebooks
-
-The same pipeline is exposed through scripts:
+Prepare data and retrieval assets:
 
 ```bash
+uv run python scripts/download_data.py
 uv run python scripts/prepare_kpi_data.py
 uv run python scripts/download_docs.py
 uv run python scripts/build_index.py
 ```
 
-## 6. Run the Streamlit app
-
-Local/Ollama:
+Launch the app:
 
 ```bash
 uv run streamlit run app.py
 ```
 
-The app lets you:
+Or launch Jupyter:
 
-- select a real KPI observation,
-- ask a KPI-aware or documentation-only question,
-- enable/disable RAG,
-- optionally run the same LLM without RAG for comparison,
-- inspect the route selected by LangGraph,
-- inspect the dataset-relative KPI context,
-- inspect retrieved source chunks and citations.
+```bash
+uv run jupyter lab
+```
 
-### Streamlit Community Cloud
+Run the notebooks in order:
 
-Ollama runs on your own machine, so Streamlit Community Cloud should use Cloudflare
-Workers AI instead. Add:
+1. [notebooks/01_data_processing_and_eda.ipynb](notebooks/01_data_processing_and_eda.ipynb)
+2. [notebooks/02_rag_demo_and_evaluation.ipynb](notebooks/02_rag_demo_and_evaluation.ipynb)
+
+The first notebook covers data preparation/EDA. The second covers retrieval, RAG, LangGraph and evaluation.
+
+---
+
+## Hosted deployment
+
+The public deployment uses:
+
+- Streamlit Community Cloud
+- Supabase Postgres + pgvector
+- Cloudflare Workers AI
+
+Required Streamlit secrets:
 
 ```toml
 CLOUDFLARE_ACCOUNT_ID = "..."
 CLOUDFLARE_API_TOKEN = "..."
 CLOUDFLARE_MODEL = "@cf/meta/llama-3.2-3b-instruct"
-```
 
-For the recommended persistent deployment, also configure Supabase:
-
-```toml
 USE_SUPABASE = "true"
 SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
 SUPABASE_PUBLISHABLE_KEY = "sb_publishable_..."
 ```
 
-Seed the database once from a trusted environment with `uv run python scripts/sync_supabase.py`.
-The secret key is **not** needed by the public app.
+The public app does **not** need the Supabase secret/service-role key.
 
-A complete guide is in [`SUPABASE.md`](SUPABASE.md), and the secrets template is at `.streamlit/secrets.toml.example`.
+Seed Supabase once from a trusted environment:
 
-## 7. Why LangGraph here?
-
-LangGraph is not being added just to make the stack sound more complicated.
-
-The graph performs a real conditional workflow:
-
-```text
-START
-  |
-route question
-  |----------------------|
-  |                      |
-KPI-related             docs-only
-  |                      |
-analyze KPI              |
-  |                      |
-  +------> retrieve <-----+
-             |
-          generate
-             |
-            END
+```bash
+uv run python scripts/sync_supabase.py
 ```
 
-A question such as **“What is RSRP?”** skips KPI analysis. A question about the selected network observation first creates dataset-relative KPI context and then retrieves documentation.
-
-## 8. Evaluation philosophy
-
-The main comparison is controlled:
+The lightweight Streamlit entrypoint is:
 
 ```text
-same model + same question
+deploy/app.py
+```
 
+See [DEPLOYMENT.md](DEPLOYMENT.md) and [SUPABASE.md](SUPABASE.md) for setup details.
+
+---
+
+## Evaluation
+
+Retrieval and generation are evaluated separately.
+
+The retrieval evaluation includes metrics such as:
+
+- source hit/recall/precision
+- MRR
+- evidence-term recall
+- latency
+
+Generation compares the **same LLM on the same questions**:
+
+```text
 LLM only
 vs
 LLM + retrieved context
 ```
 
-Retrieval is evaluated separately from generation. This matters because RAG can fail in two different places:
+Additional diagnostics include citation validity/support proxies and answer-context similarity.
 
-1. **retrieval failure** — the useful document/chunk was never found;
-2. **generation failure** — the right context was retrieved but the LLM still produced a poor answer.
+The benchmark is intentionally small and hand-auditable. It demonstrates experimental design rather than claiming to be a production telecom benchmark.
 
-The included benchmark is intentionally small and hand-auditable. It is meant to demonstrate experimental thinking, not claim a production-grade telecom benchmark.
+---
 
-## 9. Repository structure
+## Repository structure
 
 ```text
 Telecom-RAG/
 ├── app.py
-├── pyproject.toml
-├── uv.lock
-├── requirements.txt
-├── requirements-dev.txt
-├── SUPABASE.md
-├── CLOUDFLARE.md
-├── data/
-│   ├── README.md
-│   ├── raw/                 # downloaded, ignored by Git
-│   └── processed/           # generated, ignored by Git
-├── docs/
-│   ├── SOURCES.md
-│   └── corpus/              # downloaded, ignored by Git
-├── eval/
-│   └── questions.json
+├── deploy/
+│   ├── app.py
+│   └── requirements.txt
 ├── notebooks/
 │   ├── 01_data_processing_and_eda.ipynb
 │   └── 02_rag_demo_and_evaluation.ipynb
@@ -307,63 +371,35 @@ Telecom-RAG/
 │   ├── prepare_kpi_data.py
 │   ├── build_index.py
 │   └── sync_supabase.py
-├── supabase/
-│   └── migrations/
-│       └── 20260921130000_init_telecom_rag.sql
-└── src/telecom_rag/
-    ├── config.py
-    ├── data.py
-    ├── kpi.py
-    ├── documents.py
-    ├── rag.py
-    ├── retrieval.py
-    ├── supabase_backend.py
-    ├── graph.py
-    └── evaluation.py
+├── src/telecom_rag/
+│   ├── config.py
+│   ├── data.py
+│   ├── documents.py
+│   ├── evaluation.py
+│   ├── graph.py
+│   ├── kpi.py
+│   ├── rag.py
+│   ├── retrieval.py
+│   └── supabase_backend.py
+├── supabase/migrations/
+├── data/
+├── docs/
+├── eval/
+├── pyproject.toml
+└── uv.lock
 ```
 
-## 10. Retrieval architecture
+---
 
-The project has two interchangeable retrieval backends.
+## Design principles
 
-Local/notebook:
+This project intentionally avoids:
 
-```text
-BGE/FAISS + BM25
-       ↓
-      RRF
-       ↓
-cross-encoder
-       ↓
-Cloudflare Workers AI / local Ollama
-```
+- hard-coded universal “good/bad” radio thresholds,
+- treating correlation as causality,
+- silently mixing user-entered values with measured data,
+- dumping the full numeric KPI summary into the retrieval query,
+- unnecessary multi-agent complexity,
+- failing the whole RAG request when an optional reranker is unavailable.
 
-Hosted/deployed:
-
-```text
-BGE query embedding
-       ↓
-Supabase Postgres
-├── pgvector/HNSW
-└── full-text search
-       ↓
-      RRF
-       ↓
-cross-encoder
-       ↓
-      LLM
-```
-
-The LangGraph workflow and generation code are shared between both backends.
-
-The Streamlit UI also exposes `dense`, `hybrid`, and `reranked` modes so the retrieval ablation can be demonstrated without changing code.
-
-The detailed numeric KPI summary is **not** appended to the embedding query anymore. Only compact KPI concepts are used for retrieval; full values/percentiles are supplied later to the generator.
-
-## 11. Evaluation philosophy
-
-The benchmark is deliberately harder than the original definition-heavy version. Generic questions remain, but the majority now test corpus-specific facts, exact standards/files, applied Ericsson performance explanations, and cross-source retrieval.
-
-Useful next experiments are still controlled ablations: chunk size, candidate counts, final top-k, BGE-small vs BGE-base, corpus subsets, and reranker on/off.
-
-The project intentionally avoids hard-coding unsupported “good/bad” KPI thresholds and avoids unnecessary multi-agent complexity.
+The goal is a small, inspectable system in which the data analysis, retrieval, orchestration and generation stages can each be evaluated independently.
