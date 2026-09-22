@@ -183,6 +183,30 @@ remaining_units = max(
 )
 
 
+def _optional_float(value: str) -> float | None:
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _custom_observation_from_inputs(values: dict[str, str]) -> dict | None:
+    observation: dict[str, object] = {
+        "observation_id": "custom",
+        "observation_source": "user-entered",
+    }
+    entered = False
+    for key, raw in values.items():
+        parsed = _optional_float(raw)
+        if parsed is not None:
+            observation[key] = parsed
+            entered = True
+    return observation if entered else None
+
+
 def _citation_claims(answer: str) -> tuple[list[str], dict[str, list[str]]]:
     """Return citation IDs in first-use order and answer spans that cite each source."""
     order: list[str] = []
@@ -469,70 +493,136 @@ observation = None
 left, right = st.columns([1, 1])
 
 with left:
-    st.subheader("1. Select a measured KPI observation")
+    st.subheader("1. Provide KPI context")
 
-    if kpis is None or kpis.empty:
-        st.info(
-            "No KPI observations are available in the active backend, so the app is "
-            "running in documentation-only RAG mode."
-        )
-    else:
-        if "anomaly_score" in kpis.columns:
-            default_df = kpis.sort_values(
-                "anomaly_score", ascending=False, na_position="last"
+    observation_mode = st.radio(
+        "Observation source",
+        ["Dataset sample", "Enter your own KPIs"],
+        horizontal=True,
+        help=(
+            "Use a real Ericsson/AERPAW row for a reproducible demo, or enter your own "
+            "radio KPIs and compare them with the dataset distribution."
+        ),
+    )
+
+    if observation_mode == "Dataset sample":
+        if kpis is None or kpis.empty:
+            st.info(
+                "No KPI observations are available in the active backend. "
+                "Use 'Enter your own KPIs' or ask a documentation-only question."
             )
         else:
-            default_df = kpis
+            if "anomaly_score" in kpis.columns:
+                default_df = kpis.sort_values(
+                    "anomaly_score", ascending=False, na_position="last"
+                )
+            else:
+                default_df = kpis
 
-        choices = default_df["observation_id"].astype(str).tolist()
-        selected_id = st.selectbox("Observation", choices)
-        row = kpis.loc[
-            kpis["observation_id"].astype(str) == selected_id
-        ].iloc[0]
-        observation = row.to_dict()
+            choices = default_df["observation_id"].astype(str).tolist()
+            selected_id = st.selectbox("Dataset observation", choices)
+            row = kpis.loc[
+                kpis["observation_id"].astype(str) == selected_id
+            ].iloc[0]
+            observation = row.to_dict()
 
-        show_cols = [
-            c
-            for c in [
-                "timestamp",
-                "orientation",
-                "lte_rsrp_dbm",
-                "nr_rsrp_dbm",
-                "lte_sinr_db",
-                "nr_sinr_db",
-                "nr_cqi",
-                "nr_mcs",
-                "nr_ri",
-                "throughput_mbps",
-                "anomaly_score",
+            show_cols = [
+                c
+                for c in [
+                    "timestamp",
+                    "orientation",
+                    "lte_rsrp_dbm",
+                    "nr_rsrp_dbm",
+                    "lte_sinr_db",
+                    "nr_sinr_db",
+                    "nr_cqi",
+                    "nr_mcs",
+                    "nr_ri",
+                    "throughput_mbps",
+                    "anomaly_score",
+                ]
+                if c in row.index
             ]
-            if c in row.index
-        ]
-        st.dataframe(
-            pd.DataFrame(
-                {
-                    "metric": show_cols,
-                    "value": [row[c] for c in show_cols],
-                }
-            ),
-            hide_index=True,
-            use_container_width=True,
-        )
+            st.dataframe(
+                pd.DataFrame(
+                    {
+                        "metric": show_cols,
+                        "value": [row[c] for c in show_cols],
+                    }
+                ),
+                hide_index=True,
+                use_container_width=True,
+            )
+            st.caption(
+                "A selected row is context only. Generic questions such as "
+                "'What does RSRP stand for?' still use the docs-only route."
+            )
+    else:
         st.caption(
-            "The selected row is only used when your question explicitly refers to "
-            "this observation/measurement or asks to diagnose it."
+            "Enter only the KPIs you know. Blank fields are ignored. Values are compared "
+            "with the real Ericsson/AERPAW dataset when KPI analysis is used."
         )
+
+        custom_left, custom_right = st.columns(2)
+        with custom_left:
+            nr_rsrp = st.text_input("NR RSRP (dBm)", placeholder="-95")
+            nr_sinr = st.text_input("NR SINR (dB)", placeholder="10")
+            nr_cqi = st.text_input("NR CQI", placeholder="12")
+            nr_ri = st.text_input("NR RI", placeholder="2")
+        with custom_right:
+            lte_rsrp = st.text_input("LTE RSRP (dBm)", placeholder="-90")
+            lte_sinr = st.text_input("LTE SINR (dB)", placeholder="15")
+            nr_mcs = st.text_input("NR MCS", placeholder="18")
+            throughput = st.text_input("Throughput (Mbps)", placeholder="50")
+
+        custom_values = {
+            "nr_rsrp_dbm": nr_rsrp,
+            "nr_sinr_db": nr_sinr,
+            "nr_cqi": nr_cqi,
+            "nr_ri": nr_ri,
+            "lte_rsrp_dbm": lte_rsrp,
+            "lte_sinr_db": lte_sinr,
+            "nr_mcs": nr_mcs,
+            "throughput_mbps": throughput,
+        }
+        observation = _custom_observation_from_inputs(custom_values)
+
+        if observation:
+            preview_rows = [
+                {"metric": key, "value": value}
+                for key, value in observation.items()
+                if key not in {"observation_id", "observation_source"}
+            ]
+            st.dataframe(
+                pd.DataFrame(preview_rows),
+                hide_index=True,
+                use_container_width=True,
+            )
+            st.success(
+                "Custom KPI observation ready. Ask about 'these values', "
+                "'my measurement', or 'this observation' to activate KPI analysis."
+            )
+        else:
+            st.info(
+                "Enter at least one KPI value to create a custom observation."
+            )
 
 
 with right:
     st.subheader("2. Ask a question")
 
-    default_q = (
-        "Why might this observation have this throughput, and which radio measurements are "
-        "most relevant to investigate?"
-        if observation
-        else "What do RSRP and SINR measure in a 5G NR network?"
-    )
+    if observation_mode == "Enter your own KPIs" and observation:
+        default_q = (
+            "Diagnose these values. What stands out, what could explain the throughput, "
+            "and what should I investigate next?"
+        )
+    elif observation:
+        default_q = (
+            "Why might this observation have this throughput, and which radio measurements "
+            "are most relevant to investigate?"
+        )
+    else:
+        default_q = "What do RSRP and SINR measure in a 5G NR network?"
 
     question = st.text_area(
         "Question",
@@ -554,7 +644,6 @@ with right:
         use_container_width=True,
         disabled=run_disabled,
     )
-
 
 if run:
     cleaned_question = question.strip()
