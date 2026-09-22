@@ -530,12 +530,19 @@ def answer_with_rag(
         [SystemMessage(content=system_prompt), HumanMessage(content=user)]
     )
     latency = time.perf_counter() - start
-    answer_text = str(response.content)
+    answer_text = _visible_message_text(response.content)
+    provider_metadata = dict(getattr(response, "response_metadata", {}) or {})
+    if not answer_text:
+        raise RuntimeError(
+            "The model returned no visible answer text "
+            f"(provider_metadata={provider_metadata})."
+        )
     return {
         "answer": answer_text,
         "answer_sections": parse_answer_sections(answer_text),
         "sources": sources,
         "latency_s": latency,
+        "provider_metadata": provider_metadata,
     }
 
 
@@ -552,8 +559,16 @@ def answer_without_rag(
         [SystemMessage(content=BASELINE_SYSTEM_PROMPT), HumanMessage(content=user)]
     )
     latency = time.perf_counter() - start
+    answer_text = _visible_message_text(response.content)
+    provider_metadata = dict(getattr(response, "response_metadata", {}) or {})
+    if not answer_text:
+        raise RuntimeError(
+            "The model returned no visible answer text "
+            f"(provider_metadata={provider_metadata})."
+        )
     return {
-        "answer": str(response.content),
+        "answer": answer_text,
         "sources": [],
         "latency_s": latency,
+        "provider_metadata": provider_metadata,
     }
