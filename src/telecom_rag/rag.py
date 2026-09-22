@@ -231,7 +231,8 @@ def get_llm(
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
-            model=model or os.getenv("CLOUDFLARE_MODEL", CLOUDFLARE_MODEL),
+            model=model
+            or os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_MODEL),
             api_key=api_token,
             base_url=(
                 "https://api.cloudflare.com/client/v4/accounts/"
