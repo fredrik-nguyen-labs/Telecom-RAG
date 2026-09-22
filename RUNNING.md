@@ -200,21 +200,16 @@ The notebook demonstrates:
 12. a 20-question source-aware evaluation,
 13. **same LLM without RAG vs final reranked RAG** evaluation.
 
-The default generation evaluation runs the first 10 questions to keep local inference reasonably fast.
+The headline generation evaluation now runs **all 20 questions** by default so the
+standard-specific, applied-diagnostic, and cross-source cases are included.
 
-Change:
+The notebook also saves raw and summarized evaluation tables under:
 
-```python
-limit=10
+```text
+eval/results/
 ```
 
-to:
-
-```python
-limit=None
-```
-
-to run all 20 evaluation questions.
+This makes it possible to compare runs even when notebook outputs are not committed.
 
 ---
 
