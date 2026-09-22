@@ -167,6 +167,173 @@ def _throughput_correlations(
     return results[:max_items]
 
 
+def _rank_correlation(
+    reference_df: pd.DataFrame,
+    x_column: str,
+    y_column: str,
+) -> dict[str, Any] | None:
+    x = _numeric_series(reference_df, x_column)
+    y = _numeric_series(reference_df, y_column)
+    pair = pd.DataFrame({"x": x, "y": y}).dropna()
+    if len(pair) < 20 or pair["x"].nunique() < 2 or pair["y"].nunique() < 2:
+        return None
+    rho = pair["x"].rank(method="average").corr(
+        pair["y"].rank(method="average"),
+        method="pearson",
+    )
+    if pd.isna(rho):
+        return None
+    return {
+        "x": x_column,
+        "x_label": KPI_LABELS[x_column],
+        "y": y_column,
+        "y_label": KPI_LABELS[y_column],
+        "spearman_rho": float(rho),
+        "n": int(len(pair)),
+    }
+
+
+def _key_relationships(reference_df: pd.DataFrame) -> list[dict[str, Any]]:
+    pairs = [
+        ("nr_sinr_db", "nr_cqi"),
+        ("nr_cqi", "nr_mcs"),
+        ("nr_mcs", "throughput_mbps"),
+        ("nr_sinr_db", "throughput_mbps"),
+        ("nr_rsrp_dbm", "throughput_mbps"),
+        ("nr_ri", "throughput_mbps"),
+    ]
+    output = []
+    for x_column, y_column in pairs:
+        if x_column not in reference_df.columns or y_column not in reference_df.columns:
+            continue
+        result = _rank_correlation(reference_df, x_column, y_column)
+        if result:
+            output.append(result)
+    return output
+
+
+def _local_target_consistency(
+    row: pd.Series,
+    reference_df: pd.DataFrame,
+    target: str,
+    candidate_predictors: list[str],
+    max_neighbors: int = 25,
+) -> dict[str, Any] | None:
+    actual = _numeric_value(row, target)
+    if actual is None or target not in reference_df.columns:
+        return None
+
+    predictors = [
+        column
+        for column in candidate_predictors
+        if _numeric_value(row, column) is not None
+        and column in reference_df.columns
+        and _numeric_series(reference_df, column).notna().sum() >= 20
+    ]
+    if not predictors:
+        return None
+
+    candidate_df = reference_df.copy()
+    if (
+        str(row.get("observation_source", "")) != "user-entered"
+        and "observation_id" in candidate_df.columns
+        and "observation_id" in row.index
+        and pd.notna(row.get("observation_id"))
+    ):
+        candidate_df = candidate_df.loc[
+            candidate_df["observation_id"].astype(str)
+            != str(row.get("observation_id"))
+        ]
+
+    matrix = candidate_df[predictors].apply(pd.to_numeric, errors="coerce")
+    medians = matrix.median(axis=0)
+    scales = matrix.std(axis=0, ddof=0).replace(0, np.nan)
+    valid = [
+        column
+        for column in predictors
+        if pd.notna(medians[column]) and pd.notna(scales[column]) and scales[column] > 0
+    ]
+    if not valid:
+        return None
+
+    matrix = matrix[valid].fillna(medians[valid])
+    row_vector = np.array([_numeric_value(row, column) for column in valid], dtype=float)
+    med = medians[valid].to_numpy(dtype=float)
+    scale = scales[valid].to_numpy(dtype=float)
+    distances = np.sqrt(
+        np.mean(
+            (((matrix.to_numpy(dtype=float) - med) / scale) - ((row_vector - med) / scale))
+            ** 2,
+            axis=1,
+        )
+    )
+
+    n_neighbors = min(max_neighbors, len(candidate_df))
+    if n_neighbors < 3:
+        return None
+    positions = np.argsort(distances)[:n_neighbors]
+    target_values = pd.to_numeric(
+        candidate_df.iloc[positions][target],
+        errors="coerce",
+    ).dropna()
+    if len(target_values) < 3:
+        return None
+
+    median = float(target_values.median())
+    q25 = float(target_values.quantile(0.25))
+    q75 = float(target_values.quantile(0.75))
+    local_pct = float((target_values <= actual).mean() * 100.0)
+
+    if local_pct <= 15:
+        status = "low relative to similar observations"
+    elif local_pct >= 85:
+        status = "high relative to similar observations"
+    else:
+        status = "within the typical local range"
+
+    return {
+        "target": target,
+        "target_label": KPI_LABELS[target],
+        "actual": actual,
+        "median": median,
+        "q25": q25,
+        "q75": q75,
+        "gap": actual - median,
+        "local_percentile": local_pct,
+        "status": status,
+        "features": valid,
+        "feature_labels": [KPI_LABELS[column] for column in valid],
+        "k": int(n_neighbors),
+    }
+
+
+def _relationship_consistency(
+    row: pd.Series,
+    reference_df: pd.DataFrame,
+) -> list[dict[str, Any]]:
+    specs = [
+        (
+            "nr_cqi",
+            ["nr_sinr_db", "nr_rsrp_dbm", "lte_sinr_db", "lte_rsrp_dbm"],
+        ),
+        (
+            "nr_mcs",
+            ["nr_cqi", "nr_sinr_db", "nr_rsrp_dbm", "nr_ri"],
+        ),
+    ]
+    output: list[dict[str, Any]] = []
+    for target, predictors in specs:
+        result = _local_target_consistency(
+            row,
+            reference_df,
+            target=target,
+            candidate_predictors=predictors,
+        )
+        if result:
+            output.append(result)
+    return output
+
+
 def _nearest_neighbor_analysis(
     row: pd.Series,
     reference_df: pd.DataFrame,
@@ -333,6 +500,8 @@ def analyze_observation(row: pd.Series, reference_df: pd.DataFrame) -> dict[str,
     is_user_entered = str(row.get("observation_source", "")) == "user-entered"
     percentiles = _percentile_rows(row, reference_df)
     correlations = _throughput_correlations(reference_df)
+    key_relationships = _key_relationships(reference_df)
+    relationship_consistency = _relationship_consistency(row, reference_df)
     neighbors = _nearest_neighbor_analysis(row, reference_df)
     multivariate = _multivariate_profile(row, reference_df)
 
@@ -380,6 +549,26 @@ def analyze_observation(row: pd.Series, reference_df: pd.DataFrame) -> dict[str,
         lines.append(
             "- These are descriptive associations in this dataset, not causal effects."
         )
+
+    if relationship_consistency:
+        lines.append("\nCross-KPI consistency checks:")
+        for item in relationship_consistency:
+            predictors = ", ".join(item["feature_labels"])
+            lines.append(
+                f"- {item['target_label']}: {item['actual']:.3g}; among "
+                f"{item['k']} observations with similar {predictors}, median was "
+                f"{item['median']:.3g} (IQR {item['q25']:.3g}–{item['q75']:.3g}), "
+                f"placing this value around the {item['local_percentile']:.0f}th "
+                f"local percentile ({item['status']})."
+            )
+
+    if key_relationships:
+        lines.append("\nKey reference-dataset KPI relationships:")
+        for item in key_relationships:
+            lines.append(
+                f"- {item['x_label']} vs {item['y_label']}: rank correlation "
+                f"rho={item['spearman_rho']:+.2f} (n={item['n']})."
+            )
 
     if neighbors:
         feature_names = ", ".join(neighbors["feature_labels"])
@@ -433,6 +622,8 @@ def analyze_observation(row: pd.Series, reference_df: pd.DataFrame) -> dict[str,
         "source": "user-entered" if is_user_entered else "dataset",
         "percentiles": percentiles,
         "throughput_correlations": correlations,
+        "key_relationships": key_relationships,
+        "relationship_consistency": relationship_consistency,
         "neighbors": neighbors,
         "multivariate": multivariate,
         "anomaly": anomaly,
