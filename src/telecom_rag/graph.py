@@ -30,10 +30,52 @@ class AppState(TypedDict, total=False):
     route: str
 
 
-KPI_TERMS = {
-    "observation", "throughput", "rsrp", "rsrq", "sinr", "cqi", "mcs",
-    "cell", "kpi", "signal", "performance", "radio", "quality",
-}
+KPI_REFERENCE_PHRASES = (
+    "this observation",
+    "this measurement",
+    "this row",
+    "this sample",
+    "these values",
+    "these kpis",
+    "these measurements",
+    "selected observation",
+    "selected measurement",
+    "current observation",
+    "current measurement",
+    "this throughput",
+    "this rsrp",
+    "this sinr",
+    "this cqi",
+    "this mcs",
+)
+
+KPI_DIAGNOSTIC_PHRASES = (
+    "diagnose this",
+    "diagnose the selected",
+    "investigate this",
+    "investigate the selected",
+    "what is unusual about this",
+    "what is wrong with this",
+    "why is this observation",
+    "why is this measurement",
+    "why might this observation",
+    "why might this measurement",
+    "what explains this observation",
+    "what explains this measurement",
+)
+
+
+def question_needs_kpi(question: str, has_observation: bool) -> bool:
+    """Route to KPI analysis only when the user explicitly refers to selected data.
+
+    Merely mentioning RSRP/SINR/throughput is a technical-doc question. This prevents a
+    selected UI row from contaminating generic questions such as "What does RSRP mean?".
+    """
+    if not has_observation:
+        return False
+
+    q = " ".join(question.lower().split())
+    return any(phrase in q for phrase in KPI_REFERENCE_PHRASES + KPI_DIAGNOSTIC_PHRASES)
 
 
 def build_graph(
@@ -51,9 +93,10 @@ def build_graph(
     """
 
     def route_node(state: AppState) -> AppState:
-        q = state["question"].lower()
-        has_observation = bool(state.get("observation"))
-        needs_kpi = has_observation and any(term in q for term in KPI_TERMS)
+        needs_kpi = question_needs_kpi(
+            state["question"],
+            has_observation=bool(state.get("observation")),
+        )
         return {"route": "kpi+docs" if needs_kpi else "docs-only"}
 
     def route_edge(state: AppState) -> Literal["analyze_kpi", "retrieve"]:
