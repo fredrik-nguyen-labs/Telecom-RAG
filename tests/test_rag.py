@@ -4,7 +4,7 @@ from langchain_core.documents import Document
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from telecom_rag.rag import CloudflareWorkersAIChat, answer_with_rag
+from telecom_rag.rag import CloudflareWorkersAIChat, answer_with_rag, get_llm
 
 
 class FakeResponse:
@@ -18,6 +18,22 @@ class FakeResponse:
     def json(self) -> dict:
         return self._payload
 
+
+
+
+def test_cloudflare_factory_returns_direct_adapter(monkeypatch) -> None:
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "account")
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "token")
+
+    llm = get_llm(
+        provider="cloudflare",
+        model="@cf/google/gemma-4-26b-a4b-it",
+        max_output_tokens=128,
+    )
+
+    assert isinstance(llm, CloudflareWorkersAIChat)
+    assert llm.model == "@cf/google/gemma-4-26b-a4b-it"
+    assert llm.max_output_tokens == 128
 
 def test_cloudflare_adapter_uses_documented_request_shape(monkeypatch) -> None:
     captured: dict = {}
