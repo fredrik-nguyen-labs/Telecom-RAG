@@ -732,3 +732,9 @@ st.caption(
     "thresholds. Retrieved sources are shown so the technical explanation can be inspected."
 )
 
+st.markdown("#### Tech stack")
+st.caption(
+    "Python · Streamlit · LangGraph · LangChain · Supabase/PostgreSQL + pgvector · "
+    "Cloudflare Workers AI · BGE embeddings/reranking · FAISS · Ollama"
+)
+
