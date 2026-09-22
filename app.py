@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -157,6 +158,85 @@ openai_available = bool(os.getenv("OPENAI_API_KEY"))
 remaining_units = max(
     0, MAX_REQUEST_UNITS_PER_SESSION - st.session_state.request_units_used
 )
+
+
+def _citation_claims(answer: str) -> tuple[list[str], dict[str, list[str]]]:
+    """Return citation IDs in first-use order and answer spans that cite each source."""
+    order: list[str] = []
+    claims: dict[str, list[str]] = {}
+
+    spans = [
+        span.strip()
+        for span in re.split(r"(?<=[.!?])\\s+|\\n+", answer)
+        if span.strip()
+    ]
+    for span in spans:
+        citation_ids = [f"S{n}" for n in re.findall(r"\\[S(\\d+)\\]", span)]
+        if not citation_ids:
+            continue
+        clean_claim = re.sub(r"\\s+", " ", span).strip()
+        for citation_id in citation_ids:
+            if citation_id not in order:
+                order.append(citation_id)
+            claims.setdefault(citation_id, [])
+            if clean_claim not in claims[citation_id]:
+                claims[citation_id].append(clean_claim)
+    return order, claims
+
+
+def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
+    """Show only sources actually cited by the answer, with claim and exact chunk."""
+    if not sources:
+        return
+
+    citation_order, claims = _citation_claims(answer)
+    if not citation_order:
+        st.info(
+            "The answer did not emit an [S#] citation even though retrieval returned "
+            "evidence. The retrieved candidates are shown below."
+        )
+        return
+
+    by_id = {source.get("citation"): source for source in sources}
+    st.subheader("Cited evidence")
+    st.caption(
+        "Each card links the claim in the answer to the exact retrieved chunk supplied "
+        "to the model. Page/section metadata comes from the source document."
+    )
+
+    for rank, citation_id in enumerate(citation_order, start=1):
+        source = by_id.get(citation_id)
+        if not source:
+            st.warning(f"[{citation_id}] was cited in the answer but is not in the retrieved sources.")
+            continue
+
+        location_bits = []
+        if source.get("page"):
+            location_bits.append(f"page {source['page']}")
+        if source.get("section"):
+            location_bits.append(f"section {source['section']}")
+        if source.get("chunk_id"):
+            location_bits.append(f"chunk {source['chunk_id']}")
+        location = " · ".join(location_bits) or "location metadata unavailable"
+
+        title = source.get("title") or source.get("source") or "Unknown source"
+        label = f"{rank}. [{citation_id}] {title} — {location}"
+
+        with st.expander(label, expanded=rank <= 2):
+            st.markdown("**Claim(s) in the answer using this citation**")
+            for claim in claims.get(citation_id, []):
+                st.markdown(f"- {claim}")
+
+            details = []
+            if source.get("retrieval_methods"):
+                details.append(f"retrieved by {source['retrieval_methods']}")
+            if source.get("rerank_score") is not None:
+                details.append(f"rerank score {source['rerank_score']:.3f}")
+            if details:
+                st.caption(" · ".join(details))
+
+            st.markdown("**Exact retrieved evidence chunk**")
+            st.code(source.get("content") or source.get("excerpt") or "", language=None)
 
 
 def _render_cloudflare_quota(placeholder, model_name: str) -> None:
@@ -455,6 +535,12 @@ if run:
         st.subheader("Answer")
         st.markdown(result["answer"])
 
+        if use_rag:
+            _render_cited_evidence(
+                result["answer"],
+                result.get("sources", []),
+            )
+
         meta_cols = st.columns(6)
         meta_cols[0].metric("Route", result.get("route", "-"))
         meta_cols[1].metric("RAG", "On" if use_rag else "Off")
@@ -481,7 +567,10 @@ if run:
                 st.code(result["kpi_context"])
 
         if result.get("sources"):
-            st.subheader("Retrieved sources")
+            st.subheader("All retrieved candidates")
+            st.caption(
+                "These are all final top-k chunks, including chunks the answer did not cite."
+            )
             for source in result["sources"]:
                 page = (
                     f" — page {source['page']}"
