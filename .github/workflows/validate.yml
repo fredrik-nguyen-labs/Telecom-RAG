@@ -16,7 +16,7 @@ jobs:
           python-version: "3.12"
 
       - name: Compile Python sources
-        run: python -m compileall -q app.py scripts src
+        run: python -m compileall -q app.py deploy scripts src
 
       - name: Validate notebook and evaluation JSON
         run: |
