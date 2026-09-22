@@ -637,10 +637,11 @@ with right:
     turn_index = len(st.session_state.chat_messages)
     initial_value = default_question if not st.session_state.chat_messages else ""
     with st.form("chat_form", clear_on_submit=False):
-        question = st.text_input(
+        question = st.text_area(
             "Message",
             value=initial_value,
             key=f"chat_question_{turn_index}",
+            height=130,
             max_chars=MAX_QUESTION_CHARS,
             disabled=run_disabled,
         )
