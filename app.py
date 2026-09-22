@@ -147,6 +147,12 @@ st.caption(
     "Local/notebooks: FAISS + BM25 + RRF."
 )
 
+st.info(
+    "How to use: select a dataset observation or enter your own KPIs, then ask either "
+    "a question about the measurement or a general 5G/telecom question. The app "
+    "automatically chooses the appropriate analysis and retrieval path."
+)
+
 
 # Prefer persistent Supabase storage when configured and seeded. If credentials are
 # missing, the migration was not applied, or the database is empty, retain the fully
