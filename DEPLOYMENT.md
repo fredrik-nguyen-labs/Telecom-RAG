@@ -113,3 +113,6 @@ The lightweight hosted deployment requires a working seeded Supabase backend.
 If Cloudflare reranking alone is slow/unavailable, retrieval falls back to the fused RRF
 ranking. Provider/network failures outside that optional rerank step are shown as request
 errors rather than silently changing the architecture.
+
+
+The Cloudflare generator/router are invoked with reasoning disabled for the interactive application so requests reliably return visible answer text within the configured output budget.
