@@ -4,7 +4,6 @@ import time
 from typing import Any, Literal, TypedDict
 
 import pandas as pd
-from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 
@@ -18,12 +17,10 @@ class AppState(TypedDict, total=False):
     use_rag: bool
     observation: dict[str, Any] | None
     kpi_context: str
-    kpi_analysis: dict[str, Any]
     retrieval_query: str
     retrieval_mode: str
     retrieved_docs: list[Any]
     answer: str
-    answer_sections: dict[str, str]
     sources: list[dict[str, Any]]
     provider_metadata: dict[str, Any]
     latency_s: float
@@ -99,26 +96,10 @@ def _parse_router_response(content: Any) -> tuple[str, str] | None:
     return None
 
 
-def _docs_only_answer(sections: dict[str, str]) -> tuple[str, dict[str, str]]:
-    """Keep only factual docs-only sections and rebuild the raw answer consistently."""
-    filtered: dict[str, str] = {}
-    if sections.get("answer"):
-        filtered["answer"] = sections["answer"]
-    if sections.get("technical_interpretation"):
-        filtered["technical_interpretation"] = sections["technical_interpretation"]
-
-    parts: list[str] = []
-    if filtered.get("answer"):
-        parts.append(filtered["answer"])
-    if filtered.get("technical_interpretation"):
-        parts.append(filtered["technical_interpretation"])
-    return "\n\n".join(parts).strip(), filtered
-
-
 def build_graph(
-    llm: BaseChatModel,
+    llm: Any,
     retriever: RetrieverProtocol,
-    router_llm: BaseChatModel | None = None,
+    router_llm: Any | None = None,
     reference_df: pd.DataFrame | None = None,
     top_k: int = 4,
     retrieval_mode: str = "reranked",
@@ -179,13 +160,9 @@ def build_graph(
 
     def analyze_kpi_node(state: AppState) -> AppState:
         if reference_df is None or not state.get("observation"):
-            return {"kpi_context": "", "kpi_analysis": {}}
-        row = pd.Series(state["observation"])
-        analysis = analyze_observation(row, reference_df)
-        return {
-            "kpi_context": str(analysis.get("context", "")),
-            "kpi_analysis": analysis,
-        }
+            return {"kpi_context": ""}
+        analysis = analyze_observation(pd.Series(state["observation"]), reference_df)
+        return {"kpi_context": str(analysis.get("context", ""))}
 
     def retrieve_node(state: AppState) -> AppState:
         query = build_retrieval_query(
@@ -228,22 +205,12 @@ def build_graph(
         generation_latency_s = float(result.get("latency_s", 0.0))
         retrieval_latency_s = float(state.get("retrieval_latency_s", 0.0))
         router_latency_s = float(state.get("router_latency_s", 0.0))
-        if state.get("route") != "kpi+docs":
-            # Defensive fallback only; docs-only generation already uses a dedicated
-            # prompt that never requests KPI evidence or hypotheses.
-            raw_sections = dict(result.get("answer_sections") or {})
-            clean_answer, clean_sections = _docs_only_answer(raw_sections)
-            result["answer_sections"] = clean_sections
-            if clean_answer:
-                result["answer"] = clean_answer
-
         result["router_latency_s"] = router_latency_s
         result["generation_latency_s"] = generation_latency_s
         result["retrieval_latency_s"] = retrieval_latency_s
         result["total_latency_s"] = (
             router_latency_s + retrieval_latency_s + generation_latency_s
         )
-        # Keep latency_s for UI/backward compatibility, now as end-to-end RAG latency.
         result["latency_s"] = result["total_latency_s"]
         return result
 
