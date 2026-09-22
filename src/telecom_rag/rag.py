@@ -395,6 +395,12 @@ def _extract_token_usage(response: Any) -> dict[str, int]:
     }
 
 
+
+def extract_token_usage(response: Any) -> dict[str, int]:
+    """Public wrapper used by orchestration nodes that make their own LLM calls."""
+    return _extract_token_usage(response)
+
+
 def answer_with_rag(
     llm: BaseChatModel,
     question: str,
