@@ -19,6 +19,9 @@ from .config import (
     CHUNKING_VERSION,
     CHUNK_OVERLAP,
     CHUNK_SIZE,
+    CLOUDFLARE_ACCOUNT_ID,
+    CLOUDFLARE_API_TOKEN,
+    CLOUDFLARE_MODEL,
     EMBEDDING_MODEL,
     MAX_OUTPUT_TOKENS,
     OLLAMA_MODEL,
@@ -204,6 +207,29 @@ def get_llm(provider: str = "ollama", model: str | None = None) -> BaseChatModel
             temperature=0,
             num_predict=MAX_OUTPUT_TOKENS,
         )
+    if provider == "cloudflare":
+        account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", CLOUDFLARE_ACCOUNT_ID)
+        api_token = os.getenv("CLOUDFLARE_API_TOKEN", CLOUDFLARE_API_TOKEN)
+        if not account_id or not api_token:
+            raise RuntimeError(
+                "Cloudflare Workers AI is not configured. Set "
+                "CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN."
+            )
+
+        from langchain_openai import ChatOpenAI
+
+        return ChatOpenAI(
+            model=model or os.getenv("CLOUDFLARE_MODEL", CLOUDFLARE_MODEL),
+            api_key=api_token,
+            base_url=(
+                "https://api.cloudflare.com/client/v4/accounts/"
+                f"{account_id}/ai/v1"
+            ),
+            temperature=0,
+            max_tokens=MAX_OUTPUT_TOKENS,
+            timeout=60,
+            max_retries=2,
+        )
     if provider == "openai":
         if not os.getenv("OPENAI_API_KEY"):
             raise RuntimeError("OPENAI_API_KEY is not set.")
@@ -216,7 +242,7 @@ def get_llm(provider: str = "ollama", model: str | None = None) -> BaseChatModel
             timeout=45,
             max_retries=1,
         )
-    raise ValueError("provider must be 'ollama' or 'openai'")
+    raise ValueError("provider must be 'ollama', 'cloudflare', or 'openai'")
 
 
 def format_context(docs: list[Document]) -> tuple[str, list[dict[str, Any]]]:
