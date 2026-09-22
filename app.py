@@ -245,8 +245,11 @@ def _render_answer_cards(result: dict) -> None:
     secondary = []
     is_kpi_route = result.get("route") == "kpi+docs"
 
-    if is_kpi_route and sections.get("measured_evidence"):
-        secondary.append(("📊 Measured evidence", sections["measured_evidence"]))
+    observation_evidence = (
+        sections.get("observation_evidence") or sections.get("measured_evidence")
+    )
+    if is_kpi_route and observation_evidence:
+        secondary.append(("📊 Observation evidence", observation_evidence))
     if sections.get("technical_interpretation"):
         secondary.append(
             ("📚 Technical interpretation", sections["technical_interpretation"])
