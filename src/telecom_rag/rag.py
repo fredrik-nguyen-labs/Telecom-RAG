@@ -8,10 +8,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import requests
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from .config import (
     BGE_QUERY_PREFIX,
@@ -203,11 +204,136 @@ def load_advanced_retriever(
     )
 
 
+def _message_role(message: Any) -> str:
+    if isinstance(message, SystemMessage):
+        return "system"
+    if isinstance(message, HumanMessage):
+        return "user"
+    if isinstance(message, AIMessage):
+        return "assistant"
+    return str(getattr(message, "type", "user"))
+
+
+def _visible_message_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                text = block.get("text") or block.get("content")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "\n".join(part.strip() for part in parts if part.strip()).strip()
+    return str(content or "").strip()
+
+
+class CloudflareWorkersAIChat:
+    """Small LangChain-compatible adapter around Workers AI Chat Completions.
+
+    The hosted path uses Cloudflare's documented request schema directly instead of
+    relying on an OpenAI client to translate model-specific fields such as
+    chat_template_kwargs and max_completion_tokens.
+    """
+
+    def __init__(
+        self,
+        *,
+        account_id: str,
+        api_token: str,
+        model: str,
+        max_output_tokens: int,
+        timeout_s: float = 60.0,
+    ) -> None:
+        self.account_id = account_id
+        self.api_token = api_token
+        self.model = model
+        self.max_output_tokens = max_output_tokens
+        self.timeout_s = timeout_s
+        self.base_url = (
+            "https://api.cloudflare.com/client/v4/accounts/"
+            f"{account_id}/ai/v1/chat/completions"
+        )
+
+    def invoke(self, messages: list[Any]) -> AIMessage:
+        payload_messages = [
+            {
+                "role": _message_role(message),
+                "content": getattr(message, "content", str(message)),
+            }
+            for message in messages
+        ]
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": payload_messages,
+            "temperature": 0,
+            "max_completion_tokens": self.max_output_tokens,
+            "stream": False,
+        }
+
+        # Both deployed models are reasoning-capable. For an interactive RAG app we
+        # want the token budget spent on visible answer text, not hidden reasoning.
+        if (
+            "gemma-4" in self.model.lower()
+            or "glm-4.7" in self.model.lower()
+        ):
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
+
+        response = requests.post(
+            self.base_url,
+            headers={
+                "Authorization": f"Bearer {self.api_token}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=self.timeout_s,
+        )
+        if not response.ok:
+            try:
+                detail = response.json()
+            except Exception:
+                detail = response.text[:500]
+            raise RuntimeError(
+                f"Cloudflare Workers AI HTTP {response.status_code}: {detail}"
+            )
+
+        data = response.json()
+        choices = data.get("choices") or []
+        if not choices:
+            raise RuntimeError(
+                "Cloudflare Workers AI returned no completion choices."
+            )
+
+        choice = choices[0] or {}
+        message = choice.get("message") or {}
+        content = _visible_message_text(message.get("content"))
+        finish_reason = choice.get("finish_reason")
+        usage = data.get("usage") or {}
+
+        if not content:
+            raise RuntimeError(
+                "Cloudflare Workers AI returned an empty assistant content "
+                f"(model={self.model}, finish_reason={finish_reason}, usage={usage})."
+            )
+
+        return AIMessage(
+            content=content,
+            response_metadata={
+                "provider": "cloudflare",
+                "model": data.get("model") or self.model,
+                "finish_reason": finish_reason,
+                "usage": usage,
+            },
+        )
+
+
 def get_llm(
     provider: str = "ollama",
     model: str | None = None,
     max_output_tokens: int | None = None,
-) -> BaseChatModel:
+) -> Any:
     """Return a deterministic, bounded-output chat model for the application."""
     provider = provider.lower().strip()
     output_limit = max_output_tokens or MAX_OUTPUT_TOKENS
@@ -228,20 +354,12 @@ def get_llm(
                 "CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN."
             )
 
-        from langchain_openai import ChatOpenAI
-
-        return ChatOpenAI(
+        return CloudflareWorkersAIChat(
+            account_id=account_id,
+            api_token=api_token,
             model=model
             or os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_GENERATOR_MODEL),
-            api_key=api_token,
-            base_url=(
-                "https://api.cloudflare.com/client/v4/accounts/"
-                f"{account_id}/ai/v1"
-            ),
-            temperature=0,
-            max_tokens=output_limit,
-            timeout=60,
-            max_retries=2,
+            max_output_tokens=output_limit,
         )
     if provider == "openai":
         if not os.getenv("OPENAI_API_KEY"):
