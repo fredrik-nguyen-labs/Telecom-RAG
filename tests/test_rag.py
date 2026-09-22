@@ -1,36 +1,106 @@
 from __future__ import annotations
 
-import sys
-import types
-
 from langchain_core.documents import Document
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
+from langchain_core.messages import HumanMessage, SystemMessage
 
-from telecom_rag.rag import answer_with_rag, get_llm
+from telecom_rag.rag import CloudflareWorkersAIChat, answer_with_rag
 
 
-def test_cloudflare_llm_uses_standard_request_shape(monkeypatch) -> None:
+class FakeResponse:
+    ok = True
+    status_code = 200
+    text = ""
+
+    def __init__(self, payload: dict):
+        self._payload = payload
+
+    def json(self) -> dict:
+        return self._payload
+
+
+def test_cloudflare_adapter_uses_documented_request_shape(monkeypatch) -> None:
     captured: dict = {}
 
-    class FakeChatOpenAI:
-        def __init__(self, **kwargs):
-            captured.update(kwargs)
+    def fake_post(url, *, headers, json, timeout):
+        captured.update(
+            {
+                "url": url,
+                "headers": headers,
+                "json": json,
+                "timeout": timeout,
+            }
+        )
+        return FakeResponse(
+            {
+                "model": "@cf/google/gemma-4-26b-a4b-it",
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": "Visible answer"},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 3},
+            }
+        )
 
-    fake_module = types.ModuleType("langchain_openai")
-    fake_module.ChatOpenAI = FakeChatOpenAI
-    monkeypatch.setitem(sys.modules, "langchain_openai", fake_module)
-    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "account")
-    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "token")
-
-    get_llm(
-        provider="cloudflare",
+    monkeypatch.setattr("telecom_rag.rag.requests.post", fake_post)
+    llm = CloudflareWorkersAIChat(
+        account_id="account",
+        api_token="token",
         model="@cf/google/gemma-4-26b-a4b-it",
         max_output_tokens=128,
     )
 
-    assert captured["model"] == "@cf/google/gemma-4-26b-a4b-it"
-    assert captured["max_tokens"] == 128
-    assert "extra_body" not in captured
+    response = llm.invoke(
+        [
+            SystemMessage(content="You are helpful."),
+            HumanMessage(content="What is RSRP?"),
+        ]
+    )
+
+    assert response.content == "Visible answer"
+    assert captured["json"]["max_completion_tokens"] == 128
+    assert "max_tokens" not in captured["json"]
+    assert captured["json"]["chat_template_kwargs"] == {"enable_thinking": False}
+    assert captured["json"]["messages"][1] == {
+        "role": "user",
+        "content": "What is RSRP?",
+    }
+
+
+def test_cloudflare_adapter_reports_empty_content_with_finish_reason(monkeypatch) -> None:
+    def fake_post(url, *, headers, json, timeout):
+        return FakeResponse(
+            {
+                "model": "@cf/google/gemma-4-26b-a4b-it",
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": ""},
+                        "finish_reason": "length",
+                    }
+                ],
+                "usage": {"completion_tokens": 128},
+            }
+        )
+
+    monkeypatch.setattr("telecom_rag.rag.requests.post", fake_post)
+    llm = CloudflareWorkersAIChat(
+        account_id="account",
+        api_token="token",
+        model="@cf/google/gemma-4-26b-a4b-it",
+        max_output_tokens=128,
+    )
+
+    try:
+        llm.invoke([HumanMessage(content="test")])
+    except RuntimeError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("Expected empty-content response to fail")
+
+    assert "finish_reason=length" in message
+    assert "completion_tokens" in message
 
 
 def test_answer_with_rag_returns_model_content_and_sources() -> None:
