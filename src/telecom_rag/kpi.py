@@ -4,10 +4,6 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import IsolationForest
-from sklearn.impute import SimpleImputer
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 
 
 DEFAULT_KPI_COLUMNS = [
@@ -34,6 +30,11 @@ def add_anomaly_scores(
     random_state: int = 42,
 ) -> AnomalyResult:
     """Add an unsupervised anomaly score without inventing telecom thresholds."""
+    from sklearn.ensemble import IsolationForest
+    from sklearn.impute import SimpleImputer
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
+
     out = df.copy()
     features = [
         c
