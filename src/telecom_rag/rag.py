@@ -276,6 +276,8 @@ def format_context(docs: list[Document]) -> tuple[str, list[dict[str, Any]]]:
                 "chunk_id": doc.metadata.get("chunk_id"),
                 "retrieval_methods": doc.metadata.get("retrieval_methods"),
                 "rerank_score": doc.metadata.get("rerank_score"),
+                "reranker_backend": doc.metadata.get("reranker_backend"),
+                "reranker_fallback_reason": doc.metadata.get("reranker_fallback_reason"),
                 "excerpt": doc.page_content[:650],
                 "content": doc.page_content,
             }
