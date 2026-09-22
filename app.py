@@ -641,7 +641,7 @@ with right:
             "Message",
             value=initial_value,
             key=f"chat_question_{turn_index}",
-            height=130,
+            height=220,
             max_chars=MAX_QUESTION_CHARS,
             disabled=run_disabled,
         )
