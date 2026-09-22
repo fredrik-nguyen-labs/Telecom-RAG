@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from telecom_rag.config import (  # noqa: E402
-    CLOUDFLARE_MODEL,
+    CLOUDFLARE_GENERATOR_MODEL,
     CLOUDFLARE_ROUTER_MODEL,
 )
 from telecom_rag.graph import (  # noqa: E402
@@ -320,7 +320,7 @@ def main() -> int:
     print("Loading hosted generator/router...")
     generator = get_llm(
         provider="cloudflare",
-        model=CLOUDFLARE_MODEL,
+        model=CLOUDFLARE_GENERATOR_MODEL,
     )
     router = get_llm(
         provider="cloudflare",
@@ -376,7 +376,7 @@ def main() -> int:
         "question_count": len(questions),
         "routing_question_count": len(routing_questions),
         "routing_accuracy": routing_accuracy,
-        "generator_model": CLOUDFLARE_MODEL,
+        "generator_model": CLOUDFLARE_GENERATOR_MODEL,
         "router_model": CLOUDFLARE_ROUTER_MODEL,
         "notes": (
             "Hosted-only evaluation: Supabase + Cloudflare. "
