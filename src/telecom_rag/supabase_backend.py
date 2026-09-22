@@ -88,14 +88,6 @@ def get_supabase_status(client: Client | None = None) -> dict[str, Any]:
     return dict(response.data or {})
 
 
-def supabase_is_seeded(client: Client | None = None) -> bool:
-    try:
-        status = get_supabase_status(client)
-        return int(status.get("document_chunks_current", 0)) > 0
-    except Exception:
-        return False
-
-
 def _row_to_document(row: dict[str, Any]) -> Document:
     metadata = dict(row.get("metadata") or {})
     metadata.update(
@@ -576,68 +568,3 @@ def load_kpis_from_supabase(
     if "payload" in df.columns:
         df = df.drop(columns=["payload", "updated_at"], errors="ignore")
     return df
-
-
-
-# Cloudflare Workers AI free allocation and current default-model conversion.
-# Cloudflare's pricing page (2026-09) lists Llama 3.2 3B at:
-#   4,625 Neurons / 1M input tokens
-#  30,475 Neurons / 1M output tokens
-CLOUDFLARE_FREE_NEURONS_PER_DAY = 10_000.0
-_CLOUDFLARE_NEURON_RATES: dict[str, tuple[float, float]] = {
-    "@cf/meta/llama-3.2-3b-instruct": (4625.0, 30475.0),
-    "@cf/qwen/qwen3-30b-a3b-fp8": (4625.0, 30475.0),
-    "@cf/meta/llama-3.2-1b-instruct": (2457.0, 18252.0),
-}
-
-
-def estimate_cloudflare_neurons(
-    model: str,
-    input_tokens: int,
-    output_tokens: int,
-) -> float | None:
-    rates = _CLOUDFLARE_NEURON_RATES.get(model)
-    if rates is None:
-        return None
-    input_rate, output_rate = rates
-    return (
-        max(int(input_tokens), 0) * input_rate / 1_000_000
-        + max(int(output_tokens), 0) * output_rate / 1_000_000
-    )
-
-
-def record_cloudflare_usage(
-    model: str,
-    input_tokens: int,
-    output_tokens: int,
-    client: Client | None = None,
-) -> None:
-    client = client or get_supabase_client(admin=False)
-    client.rpc(
-        "record_cloudflare_usage",
-        {
-            "p_model": model,
-            "p_input_tokens": int(input_tokens),
-            "p_output_tokens": int(output_tokens),
-        },
-    ).execute()
-
-
-def get_cloudflare_usage_today(
-    model: str,
-    client: Client | None = None,
-) -> dict[str, Any]:
-    client = client or get_supabase_client(admin=False)
-    response = client.rpc("cloudflare_usage_today").execute()
-    usage = dict(response.data or {})
-    input_tokens = int(usage.get("input_tokens", 0))
-    output_tokens = int(usage.get("output_tokens", 0))
-    estimated = estimate_cloudflare_neurons(model, input_tokens, output_tokens)
-    usage["estimated_neurons"] = estimated
-    usage["estimated_remaining_neurons"] = (
-        max(0.0, CLOUDFLARE_FREE_NEURONS_PER_DAY - estimated)
-        if estimated is not None
-        else None
-    )
-    usage["free_neurons_per_day"] = CLOUDFLARE_FREE_NEURONS_PER_DAY
-    return usage
