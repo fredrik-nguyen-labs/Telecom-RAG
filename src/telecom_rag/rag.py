@@ -332,9 +332,9 @@ citations or pretend you consulted documents. Keep the answer concise and techni
 
 
 _SECTION_RE = re.compile(
-    r"(?im)^\\s*(?:#{1,6}\\s*)?"
+    r"(?im)^\s*(?:#{1,6}\s*)?"
     r"(Answer|Measured evidence|Observation evidence|Technical interpretation|"
-    r"Hypothesis|Hypotheses)\\s*:?[ \\t]*$"
+    r"Hypothesis|Hypotheses)\s*:?[ \t]*$"
 )
 
 
