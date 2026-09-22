@@ -6,20 +6,25 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import requests
 from langchain_core.documents import Document
-from sentence_transformers import CrossEncoder
 from supabase import Client, create_client
 
 from .config import (
+    BGE_QUERY_PREFIX,
     CHUNKING_VERSION,
+    CLOUDFLARE_ACCOUNT_ID,
+    CLOUDFLARE_API_TOKEN,
+    CLOUDFLARE_EMBEDDING_MODEL,
+    CLOUDFLARE_RERANKER_MODEL,
     EMBEDDING_MODEL,
     RERANK_CANDIDATES,
     RERANKER_MODEL,
     RRF_K,
+    USE_CLOUDFLARE_RETRIEVAL,
     SUPABASE_SYNC_BATCH_SIZE,
     TOP_K,
 )
-from .documents import chunk_documents, load_documents
 from .retrieval import RetrievalResult
 
 
@@ -110,22 +115,90 @@ def _row_to_document(row: dict[str, Any]) -> Document:
     return Document(page_content=row["content"], metadata=metadata)
 
 
+class CloudflareQueryEmbeddings:
+    """Hosted BGE query embeddings for the Streamlit/Supabase runtime.
+
+    The Supabase corpus is embedded locally with SentenceTransformers using BGE's CLS
+    pooling. Workers AI is asked for CLS pooling as well so query vectors remain
+    compatible while PyTorch stays out of the Streamlit process.
+    """
+
+    def __init__(
+        self,
+        account_id: str,
+        api_token: str,
+        model: str = CLOUDFLARE_EMBEDDING_MODEL,
+        timeout: float = 30.0,
+    ):
+        self.account_id = account_id
+        self.api_token = api_token
+        self.model = model
+        self.timeout = timeout
+        self.session = requests.Session()
+
+    def embed_query(self, text: str) -> list[float]:
+        query = BGE_QUERY_PREFIX + text if "bge-" in self.model.lower() else text
+        url = (
+            "https://api.cloudflare.com/client/v4/accounts/"
+            f"{self.account_id}/ai/run/{self.model}"
+        )
+        response = self.session.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {self.api_token}",
+                "Content-Type": "application/json",
+            },
+            json={"text": query, "pooling": "cls"},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not payload.get("success", False):
+            raise RuntimeError(f"Cloudflare embedding failed: {payload.get('errors')}")
+        data = (payload.get("result") or {}).get("data") or []
+        if not data:
+            raise RuntimeError("Cloudflare embedding response contained no vector.")
+        vector = data[0] if isinstance(data[0], list) else data
+        if len(vector) != 384:
+            raise RuntimeError(
+                f"Expected a 384-d BGE vector, received {len(vector)} dimensions."
+            )
+        return [float(value) for value in vector]
+
+
 class SupabaseHybridRetriever:
-    """Hosted pgvector + Postgres FTS retrieval with local cross-encoder reranking."""
+    """Supabase hybrid retrieval with optional serverless Cloudflare ML inference."""
 
     def __init__(
         self,
         client: Client,
         embeddings: Any,
         reranker_model: str = RERANKER_MODEL,
+        cloudflare_account_id: str = "",
+        cloudflare_api_token: str = "",
+        cloudflare_reranker_model: str = CLOUDFLARE_RERANKER_MODEL,
     ):
         self.client = client
         self.embeddings = embeddings
         self.reranker_model_name = reranker_model
-        self._reranker: CrossEncoder | None = None
+        self.cloudflare_account_id = cloudflare_account_id
+        self.cloudflare_api_token = cloudflare_api_token
+        self.cloudflare_reranker_model = cloudflare_reranker_model
+        self._reranker: Any | None = None
+        self._http = requests.Session()
 
-    def _get_reranker(self) -> CrossEncoder:
+    @property
+    def uses_cloudflare_reranker(self) -> bool:
+        return bool(
+            USE_CLOUDFLARE_RETRIEVAL
+            and self.cloudflare_account_id
+            and self.cloudflare_api_token
+        )
+
+    def _get_local_reranker(self) -> Any:
         if self._reranker is None:
+            from sentence_transformers import CrossEncoder
+
             self._reranker = CrossEncoder(self.reranker_model_name)
         return self._reranker
 
@@ -158,6 +231,43 @@ class SupabaseHybridRetriever:
         ).execute()
         return [_row_to_document(row) for row in (response.data or [])]
 
+    def _cloudflare_rerank_scores(
+        self,
+        query: str,
+        candidates: list[Document],
+    ) -> list[float]:
+        url = (
+            "https://api.cloudflare.com/client/v4/accounts/"
+            f"{self.cloudflare_account_id}/ai/run/{self.cloudflare_reranker_model}"
+        )
+        response = self._http.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {self.cloudflare_api_token}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "query": query,
+                "contexts": [{"text": doc.page_content} for doc in candidates],
+                "top_k": len(candidates),
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not payload.get("success", False):
+            raise RuntimeError(f"Cloudflare reranking failed: {payload.get('errors')}")
+
+        rows = (payload.get("result") or {}).get("response") or []
+        scores = [float("-inf")] * len(candidates)
+        for row in rows:
+            idx = int(row.get("id", -1))
+            if 0 <= idx < len(scores):
+                scores[idx] = float(row.get("score", float("-inf")))
+        if not rows:
+            raise RuntimeError("Cloudflare reranker returned no scores.")
+        return scores
+
     def rerank(
         self,
         query: str,
@@ -167,16 +277,28 @@ class SupabaseHybridRetriever:
         if not candidates:
             return []
 
-        pairs = [(query, doc.page_content) for doc in candidates]
-        scores = np.asarray(self._get_reranker().predict(pairs), dtype=float)
-        order = np.argsort(-scores)[: min(k, len(candidates))]
+        if self.uses_cloudflare_reranker:
+            scores = self._cloudflare_rerank_scores(query, candidates)
+        else:
+            pairs = [(query, doc.page_content) for doc in candidates]
+            local_scores = self._get_local_reranker().predict(pairs)
+            scores = [float(score) for score in local_scores]
+
+        order = sorted(
+            range(len(candidates)),
+            key=lambda idx: scores[idx],
+            reverse=True,
+        )[: min(k, len(candidates))]
 
         output: list[Document] = []
         for rank, idx in enumerate(order, start=1):
-            doc = candidates[int(idx)]
+            doc = candidates[idx]
             doc = Document(page_content=doc.page_content, metadata=dict(doc.metadata))
             doc.metadata["rerank_rank"] = rank
-            doc.metadata["rerank_score"] = float(scores[int(idx)])
+            doc.metadata["rerank_score"] = float(scores[idx])
+            doc.metadata["reranker_backend"] = (
+                "cloudflare" if self.uses_cloudflare_reranker else "local"
+            )
             output.append(doc)
         return output
 
@@ -201,12 +323,33 @@ class SupabaseHybridRetriever:
 
 
 def load_supabase_retriever() -> SupabaseHybridRetriever:
-    # Lazy import avoids a module cycle: rag owns the embedding implementation.
-    from .rag import get_embeddings
+    account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", CLOUDFLARE_ACCOUNT_ID)
+    api_token = os.getenv("CLOUDFLARE_API_TOKEN", CLOUDFLARE_API_TOKEN)
+
+    if USE_CLOUDFLARE_RETRIEVAL and account_id and api_token:
+        embeddings: Any = CloudflareQueryEmbeddings(
+            account_id=account_id,
+            api_token=api_token,
+            model=os.getenv(
+                "CLOUDFLARE_EMBEDDING_MODEL",
+                CLOUDFLARE_EMBEDDING_MODEL,
+            ),
+        )
+    else:
+        # Local fallback for notebooks/development; imports PyTorch only when needed.
+        from .rag import get_embeddings
+
+        embeddings = get_embeddings()
 
     return SupabaseHybridRetriever(
         client=get_supabase_client(admin=False),
-        embeddings=get_embeddings(),
+        embeddings=embeddings,
+        cloudflare_account_id=account_id,
+        cloudflare_api_token=api_token,
+        cloudflare_reranker_model=os.getenv(
+            "CLOUDFLARE_RERANKER_MODEL",
+            CLOUDFLARE_RERANKER_MODEL,
+        ),
     )
 
 
@@ -237,6 +380,7 @@ def sync_document_chunks(
     batch_size: int = SUPABASE_SYNC_BATCH_SIZE,
 ) -> int:
     """Embed the local corpus and upsert chunks into Supabase."""
+    from .documents import chunk_documents, load_documents
     from .rag import get_embeddings
 
     client = client or get_supabase_client(admin=True)
