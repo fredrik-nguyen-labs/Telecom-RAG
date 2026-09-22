@@ -71,15 +71,11 @@ If reranking is unavailable, the system falls back to the fused RRF ranking.
 
 ```text
 BGE + FAISS
-   +
- BM25
-   |
-  RRF
-   |
+     |
 MiniLM cross-encoder
 ```
 
-The local path is used for reproducible retrieval experiments and ablations.
+The application uses dense retrieval followed by cross-encoder reranking locally. BM25/RRF remains available only in the evaluation code as a controlled ablation.
 
 ## Data and corpus
 
