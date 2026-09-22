@@ -736,11 +736,18 @@ if run:
         )
 
         conversation_context = _conversation_context()
+        graph_question = cleaned_question
+        if conversation_context:
+            graph_question = (
+                "Recent conversation for follow-up context:\n"
+                f"{conversation_context}\n\n"
+                f"Current question:\n{cleaned_question}"
+            )
+
         with st.spinner("Running the LangGraph workflow..."):
             result = graph.invoke(
                 {
-                    "question": cleaned_question,
-                    "conversation_context": conversation_context,
+                    "question": graph_question,
                     "use_rag": True,
                     "observation": observation,
                 }
@@ -748,7 +755,15 @@ if run:
 
         answer_text = str(result.get("answer", "")).strip()
         if not answer_text:
-            raise RuntimeError("The model returned an empty visible answer.")
+            st.error(
+                "The model call completed but returned no visible text. "
+                "Please start a new conversation and retry once."
+            )
+            with st.expander("Technical details", expanded=True):
+                st.write("Route:", result.get("route"))
+                st.write("Retrieval:", result.get("retrieval_mode"))
+                st.write("Retrieved chunks:", len(result.get("sources", [])))
+            st.stop()
 
         st.session_state.chat_messages.extend(
             [
