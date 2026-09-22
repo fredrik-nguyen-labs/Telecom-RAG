@@ -1,5 +1,0 @@
-category,mode,semantic_similarity,required_term_recall,citation_present,citation_reference_validity,citation_support_similarity,answer_context_similarity,evidence_term_recall,generation_latency_s,retrieval_latency_s,total_latency_s
-corpus_specific,llm_only,0.6,0.0,0.0,,,,,2.358,0.0,2.358
-corpus_specific,rag,0.734,1.0,0.0,0.0,0.0,0.893,1.0,3.993,1.557,5.55
-general_telecom,llm_only,0.836,0.917,0.0,,,,,4.411,0.0,4.411
-general_telecom,rag,0.816,1.0,0.0,0.0,0.0,0.827,0.792,4.213,1.074,5.288
