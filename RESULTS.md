@@ -58,11 +58,12 @@ It also includes the dedicated semantic-routing benchmark.
 
 The hosted evaluation has **not produced benchmark scores yet** because the GitHub Actions environment does not currently contain the required Cloudflare and Supabase credentials. No hosted results are reported here until that run completes successfully.
 
-## Raw local outputs
+## Reproducing the local results
 
-- `eval/results/retrieval_ablation.csv`
-- `eval/results/retrieval_summary.csv`
-- `eval/results/generation_comparison.csv`
-- `eval/results/generation_summary.csv`
-- `eval/results/generation_by_category.csv`
-- `eval/results/02_rag_demo_and_evaluation.executed.ipynb`
+Run the evaluation notebook to regenerate the detailed CSVs and executed notebook under `eval/results/`. Generated evaluation artifacts are intentionally ignored by Git; this file keeps the stable summary in version control.
+
+```bash
+uv run jupyter lab
+```
+
+Open `notebooks/02_rag_demo_and_evaluation.ipynb` and run the evaluation cells.
