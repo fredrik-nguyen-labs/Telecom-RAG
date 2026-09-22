@@ -449,8 +449,11 @@ def answer_without_rag(
         [SystemMessage(content=BASELINE_SYSTEM_PROMPT), HumanMessage(content=user)]
     )
     latency = time.perf_counter() - start
+    answer_text = message_text(response.content)
+    if not answer_text:
+        raise RuntimeError("The model returned no visible answer text.")
     return {
-        "answer": message_text(response.content),
+        "answer": answer_text,
         "sources": [],
         "latency_s": latency,
     }
