@@ -92,11 +92,34 @@ def cached_retriever(backend: str):
 
 @st.cache_resource(show_spinner=False)
 def cached_llm(provider: str, model: str, max_output_tokens: int | None = None):
-    return get_llm(
-        provider=provider,
-        model=model,
-        max_output_tokens=max_output_tokens,
-    )
+    try:
+        return get_llm(
+            provider=provider,
+            model=model,
+            max_output_tokens=max_output_tokens,
+        )
+    except TypeError as exc:
+        # Streamlit may briefly reuse an older imported module during a hot reload.
+        # Fall back to the legacy signature until the process fully refreshes.
+        if "max_output_tokens" not in str(exc):
+            raise
+        return get_llm(provider=provider, model=model)
+
+
+def _build_graph_compat(llm, retriever, router_llm, **kwargs):
+    try:
+        return build_graph(
+            llm,
+            retriever,
+            router_llm=router_llm,
+            **kwargs,
+        )
+    except TypeError as exc:
+        # Same hot-reload compatibility as cached_llm: once Streamlit restarts,
+        # the current graph signature is used normally.
+        if "router_llm" not in str(exc):
+            raise
+        return build_graph(llm, retriever, **kwargs)
 
 
 @st.cache_data(show_spinner=False)
@@ -822,10 +845,10 @@ if run:
             if provider == "cloudflare"
             else llm
         )
-        graph = build_graph(
+        graph = _build_graph_compat(
             llm,
             retriever,
-            router_llm=router_llm,
+            router_llm,
             reference_df=kpis,
             top_k=top_k,
             retrieval_mode=retrieval_mode,
@@ -945,10 +968,10 @@ if run:
                     st.write(source["excerpt"])
 
         if compare and use_rag:
-            baseline_graph = build_graph(
+            baseline_graph = _build_graph_compat(
                 llm,
                 retriever,
-                router_llm=router_llm,
+                router_llm,
                 reference_df=kpis,
                 top_k=top_k,
                 retrieval_mode=retrieval_mode,
