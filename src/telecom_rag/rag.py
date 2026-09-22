@@ -24,6 +24,7 @@ from .config import (
     EMBEDDING_MODEL,
     MAX_OUTPUT_TOKENS,
     OLLAMA_MODEL,
+    OPENAI_MODEL,
     RERANKER_MODEL,
     VECTOR_STORE_DIR,
 )
@@ -202,23 +203,6 @@ def load_advanced_retriever(
     )
 
 
-def message_text(content: Any) -> str:
-    """Extract visible text from LangChain/OpenAI-compatible message content."""
-    if isinstance(content, str):
-        return content.strip()
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if isinstance(block, str):
-                parts.append(block)
-            elif isinstance(block, dict):
-                text = block.get("text")
-                if isinstance(text, str):
-                    parts.append(text)
-        return "\n".join(part.strip() for part in parts if part.strip()).strip()
-    return str(content or "").strip()
-
-
 def get_llm(
     provider: str = "ollama",
     model: str | None = None,
@@ -259,7 +243,19 @@ def get_llm(
             timeout=60,
             max_retries=2,
         )
-    raise ValueError("provider must be 'ollama' or 'cloudflare'")
+    if provider == "openai":
+        if not os.getenv("OPENAI_API_KEY"):
+            raise RuntimeError("OPENAI_API_KEY is not set.")
+        from langchain_openai import ChatOpenAI
+
+        return ChatOpenAI(
+            model=model or OPENAI_MODEL,
+            temperature=0,
+            max_tokens=MAX_OUTPUT_TOKENS,
+            timeout=45,
+            max_retries=1,
+        )
+    raise ValueError("provider must be 'ollama', 'cloudflare', or 'openai'")
 
 
 def format_context(docs: list[Document]) -> tuple[str, list[dict[str, Any]]]:
@@ -309,13 +305,6 @@ Optionally, when useful:
 ## Technical interpretation
 A concise source-supported explanation of the mechanism.
 
-Citation requirements:
-- When retrieved context is present, the answer MUST contain at least one inline citation.
-- Put citations immediately after the factual claim they support, e.g. "RSRP measures
-  reference-signal received power [S1]."
-- Use only source IDs that appear in the retrieved context. Never invent a source ID.
-- Cite each substantive technical paragraph when it relies on retrieved evidence.
-
 Give a complete, technically useful answer at the depth the question deserves. For
 explanatory or analytical questions, explain the important relationships and mechanisms
 instead of reducing the answer to a few sentences. Avoid filler, but do not artificially
@@ -350,17 +339,11 @@ Only when a causal explanation is genuinely uncertain and useful:
 Clearly qualified possible explanations and what additional evidence would distinguish
 them. Never present hypotheses as measured facts.
 
-Citation requirements:
-- When retrieved context is present, the answer MUST contain at least one inline citation.
-- Put citations immediately after the technical claim they support.
-- Use only source IDs that appear in the retrieved context. Never invent a source ID.
-- Do not cite user-entered KPI values or deterministic dataset statistics themselves;
-  cite the technical interpretation that connects those observations to telecom behavior.
-
-Do not invent universal thresholds not supported by a source. Give enough detail to
-connect the statistical evidence to the technical mechanism. Prioritize the strongest
-findings, explain why they matter, and distinguish clearly between evidence and inference.
-Avoid filler, but do not artificially shorten the response."""
+Cite source-supported technical claims with [S1], [S2], etc. Do not invent universal
+thresholds not supported by a source. Give enough detail to connect the statistical
+evidence to the technical mechanism. Prioritize the strongest findings, explain why they
+matter, and distinguish clearly between evidence and inference. Avoid filler, but do not
+artificially shorten the response."""
 
 BASELINE_SYSTEM_PROMPT = """You are a telecom network analysis assistant.
 Answer from your pretrained knowledge only. If you are unsure, say so. Do not invent
@@ -410,16 +393,9 @@ def answer_with_rag(
     retrieved_docs: list[Document],
     kpi_context: str = "",
     use_kpi_context: bool = False,
-    conversation_context: str = "",
 ) -> dict[str, Any]:
     context, sources = format_context(retrieved_docs)
     user = f"Question:\n{question}\n\n"
-    if conversation_context.strip():
-        user += (
-            "Recent conversation (only use this to resolve follow-up references; "
-            "technical facts must still come from the retrieved context):\n"
-            f"{conversation_context.strip()}\n\n"
-        )
     if kpi_context:
         user += (
             "KPI context (observation values + dataset-relative statistics; "
@@ -435,13 +411,8 @@ def answer_with_rag(
     response = llm.invoke(
         [SystemMessage(content=system_prompt), HumanMessage(content=user)]
     )
-    answer_text = message_text(response.content)
-    if not answer_text:
-        raise RuntimeError(
-            "The hosted model returned no visible answer text."
-        )
-
     latency = time.perf_counter() - start
+    answer_text = str(response.content)
     return {
         "answer": answer_text,
         "answer_sections": parse_answer_sections(answer_text),
@@ -463,11 +434,8 @@ def answer_without_rag(
         [SystemMessage(content=BASELINE_SYSTEM_PROMPT), HumanMessage(content=user)]
     )
     latency = time.perf_counter() - start
-    answer_text = message_text(response.content)
-    if not answer_text:
-        raise RuntimeError("The model returned no visible answer text.")
     return {
-        "answer": answer_text,
+        "answer": str(response.content),
         "sources": [],
         "latency_s": latency,
     }
