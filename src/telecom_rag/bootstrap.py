@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 from .config import DOCS_DIR, PROCESSED_KPI_PATH, PROJECT_ROOT, VECTOR_STORE_DIR
@@ -19,9 +19,6 @@ class BootstrapReport:
     kpi_message: str = ""
     docs_message: str = ""
     vector_message: str = ""
-
-    def to_dict(self) -> dict[str, object]:
-        return asdict(self)
 
 
 def _run_script(path: Path) -> tuple[bool, str]:
@@ -61,8 +58,8 @@ def ensure_docs() -> tuple[bool, str]:
         p for p in DOCS_DIR.glob("*")
         if p.is_file() and p.suffix.lower() in {".pdf", ".txt", ".md"} and not p.name.startswith("_")
     ] if DOCS_DIR.exists() else []
-    # The v2 corpus config has 10 sources. If only the old four-source corpus is
-    # present, refresh it automatically. We tolerate some external download failures.
+    # The configured corpus has 10 sources. Refresh obviously incomplete local corpora,
+    # while tolerating a small number of temporary publisher download failures.
     if len(readable) >= 8:
         return True, f"Using {len(readable)} downloaded RAG source files."
 
@@ -89,10 +86,10 @@ def ensure_vector_index() -> tuple[bool, str]:
 
 
 def ensure_demo_assets() -> BootstrapReport:
-    """Prepare all reproducible assets needed by a fresh Streamlit Cloud container.
+    """Prepare reproducible assets for the local Streamlit development path.
 
-    KPI data is optional: if Dryad is temporarily unavailable, the app still supports
-    documentation-only RAG. The document corpus and vector index are required.
+    KPI data is optional: if Dryad is temporarily unavailable, documentation-only RAG
+    can still run. The document corpus and local vector index are required.
     """
     report = BootstrapReport()
 
