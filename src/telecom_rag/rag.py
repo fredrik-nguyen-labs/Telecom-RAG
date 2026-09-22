@@ -202,6 +202,23 @@ def load_advanced_retriever(
     )
 
 
+def message_text(content: Any) -> str:
+    """Extract visible text from LangChain/OpenAI-compatible message content."""
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                text = block.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "\n".join(part.strip() for part in parts if part.strip()).strip()
+    return str(content or "").strip()
+
+
 def get_llm(
     provider: str = "ollama",
     model: str | None = None,
@@ -239,6 +256,11 @@ def get_llm(
             ),
             temperature=0,
             max_tokens=output_limit,
+            extra_body={
+                "chat_template_kwargs": {
+                    "enable_thinking": False,
+                }
+            },
             timeout=60,
             max_retries=2,
         )
@@ -399,7 +421,13 @@ def answer_with_rag(
         [SystemMessage(content=system_prompt), HumanMessage(content=user)]
     )
     latency = time.perf_counter() - start
-    answer_text = str(response.content)
+    answer_text = message_text(response.content)
+    if not answer_text:
+        raise RuntimeError(
+            "The hosted model returned no visible answer text. "
+            "Reasoning is disabled for application calls to prevent hidden reasoning "
+            "from consuming the output budget."
+        )
     return {
         "answer": answer_text,
         "answer_sections": parse_answer_sections(answer_text),
@@ -422,7 +450,7 @@ def answer_without_rag(
     )
     latency = time.perf_counter() - start
     return {
-        "answer": str(response.content),
+        "answer": message_text(response.content),
         "sources": [],
         "latency_s": latency,
     }
