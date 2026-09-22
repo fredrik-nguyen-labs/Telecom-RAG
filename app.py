@@ -118,6 +118,9 @@ st.caption(
     "Hosted: Supabase pgvector + PostgreSQL FTS + RRF. "
     "Local/notebooks: FAISS + BM25 + RRF."
 )
+st.markdown(
+    "🔗 [GitHub repository](https://github.com/fredrik-nguyen-labs/Telecom-RAG)"
+)
 
 st.info(
     "How to use: select a dataset observation or enter your own KPIs, then ask either "
@@ -986,10 +989,5 @@ st.caption(
     "KPI percentiles, correlations, nearest-neighbor comparisons and anomaly/rarity "
     "statistics are relative to this measurement dataset, not universal telecom quality "
     "thresholds. Retrieved sources are shown so the technical explanation can be inspected."
-)
-
-st.markdown("---")
-st.markdown(
-    "View the project on [GitHub](https://github.com/fredrik-nguyen-labs/Telecom-RAG)."
 )
 
