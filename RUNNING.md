@@ -275,33 +275,26 @@ The app lets you:
 
 ---
 
-## 10. Optional: use OpenAI instead of Ollama
+## 10. Optional: use Cloudflare Workers AI instead of Ollama
 
-The code supports a hosted OpenAI model through the same LangChain interface.
-
-Set:
+For hosted/free inference, set:
 
 ```bash
-export OPENAI_API_KEY="your-key"
-export OPENAI_MODEL="gpt-5.6-luna"
+export CLOUDFLARE_ACCOUNT_ID="your-account-id"
+export CLOUDFLARE_API_TOKEN="your-workers-ai-token"
+export CLOUDFLARE_MODEL="@cf/meta/llama-3.2-3b-instruct"
 ```
 
-On Windows PowerShell:
+Then run:
 
-```powershell
-$env:OPENAI_API_KEY="your-key"
-$env:OPENAI_MODEL="gpt-5.6-luna"
+```bash
+uv run streamlit run app.py
 ```
 
-Then select `openai` as the provider in Streamlit or change the provider in Notebook 02.
+If the Cloudflare variables are present, Streamlit automatically prefers Workers AI.
+OpenAI remains an optional fallback but is not required.
 
-For Streamlit Community Cloud, put the values in **Streamlit Secrets** rather than committing them.
-
-A template is provided at:
-
-```text
-.streamlit/secrets.toml.example
-```
+See `CLOUDFLARE.md` for the full setup and Streamlit Secrets configuration.
 
 ---
 
