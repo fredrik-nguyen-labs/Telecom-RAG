@@ -23,11 +23,9 @@ from telecom_rag.config import (
 from telecom_rag.graph import build_graph
 from telecom_rag.rag import get_llm
 from telecom_rag.supabase_backend import (
-    get_cloudflare_usage_today,
     get_supabase_status,
     load_kpis_from_supabase,
     load_supabase_retriever,
-    record_cloudflare_usage,
     supabase_runtime_configured,
 )
 
@@ -54,6 +52,9 @@ for secret_name in (
     "CLOUDFLARE_ACCOUNT_ID",
     "CLOUDFLARE_API_TOKEN",
     "CLOUDFLARE_MODEL",
+    "CLOUDFLARE_EMBEDDING_MODEL",
+    "CLOUDFLARE_RERANKER_MODEL",
+    "USE_CLOUDFLARE_RETRIEVAL",
     "OPENAI_API_KEY",
     "OPENAI_MODEL",
     "USE_SUPABASE",
@@ -493,54 +494,13 @@ def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
             st.code(source.get("content") or source.get("excerpt") or "", language=None)
 
 
-def _render_cloudflare_quota(placeholder, model_name: str) -> None:
-    with placeholder.container():
-        if not cloudflare_available:
-            return
-        st.subheader("Workers AI free quota")
-        if not using_supabase:
-            st.caption(
-                "Quota estimate needs the Supabase usage migration and hosted backend."
-            )
-            return
-        try:
-            usage = get_cloudflare_usage_today(model_name)
-            remaining = usage.get("estimated_remaining_neurons")
-            used = usage.get("estimated_neurons")
-            if remaining is None or used is None:
-                st.caption(
-                    "No Neuron conversion is configured for this model. "
-                    "Check Cloudflare's Workers AI dashboard for authoritative usage."
-                )
-                return
-            st.metric(
-                "Estimated generation quota left",
-                f"{remaining:,.0f} Neurons",
-                delta=f"{used:,.1f} app-estimated used",
-                delta_color="inverse",
-            )
-            progress = min(max(float(used) / 10_000.0, 0.0), 1.0)
-            st.progress(progress)
-            st.caption(
-                f"Tracked generation calls today: {int(usage.get('calls', 0))}. "
-                "This estimate does not yet include serverless embedding/reranker usage. "
-                "It resets at 00:00 UTC; Cloudflare's dashboard is authoritative for "
-                "account-wide usage."
-            )
-        except Exception:
-            st.caption(
-                "Usage meter not initialized yet. Apply the Cloudflare usage Supabase "
-                "migration; inference itself can still work."
-            )
-
-
 with st.sidebar:
     st.header("Demo controls")
 
     if cloudflare_available:
         provider = "cloudflare"
         model = os.getenv("CLOUDFLARE_MODEL", CLOUDFLARE_MODEL)
-        st.success("Free hosted LLM configured")
+        st.success("Hosted LLM configured")
         st.caption(f"Provider: Cloudflare Workers AI · Model: {model}")
     elif openai_available:
         provider = "openai"
@@ -589,19 +549,13 @@ with st.sidebar:
         value=min(4, MAX_TOP_K_PUBLIC),
     )
 
-    quota_placeholder = st.empty()
-    _render_cloudflare_quota(
-        quota_placeholder,
-        os.getenv("CLOUDFLARE_MODEL", CLOUDFLARE_MODEL),
-    )
-
     st.divider()
     st.subheader("Public-demo guardrails")
     st.metric("Request units left in this session", remaining_units)
     st.caption(
         "One answer = 1 unit. Enabling the baseline comparison uses 2 units. "
-        "This is a browser-session convenience guardrail. Cloudflare Workers AI's "
-        "free allocation is enforced separately by Cloudflare."
+        "This is a browser-session convenience guardrail; provider-side quotas and "
+        "billing controls are managed in the provider dashboard."
     )
 
     st.divider()
@@ -864,19 +818,6 @@ if run:
                 }
             )
 
-        if provider == "cloudflare" and using_supabase:
-            usage = result.get("llm_usage") or {}
-            if usage.get("input_tokens", 0) or usage.get("output_tokens", 0):
-                try:
-                    record_cloudflare_usage(
-                        model,
-                        int(usage.get("input_tokens", 0)),
-                        int(usage.get("output_tokens", 0)),
-                    )
-                    _render_cloudflare_quota(quota_placeholder, model)
-                except Exception:
-                    pass
-
         route_label = (
             "KPI diagnosis + technical documents"
             if result.get("route") == "kpi+docs"
@@ -997,22 +938,6 @@ if run:
                         "observation": observation,
                     }
                 )
-
-            if provider == "cloudflare" and using_supabase:
-                baseline_usage = baseline.get("llm_usage") or {}
-                if (
-                    baseline_usage.get("input_tokens", 0)
-                    or baseline_usage.get("output_tokens", 0)
-                ):
-                    try:
-                        record_cloudflare_usage(
-                            model,
-                            int(baseline_usage.get("input_tokens", 0)),
-                            int(baseline_usage.get("output_tokens", 0)),
-                        )
-                        _render_cloudflare_quota(quota_placeholder, model)
-                    except Exception:
-                        pass
 
             st.subheader("Same LLM without RAG")
             st.markdown(baseline["answer"])
