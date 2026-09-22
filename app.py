@@ -13,6 +13,7 @@ import streamlit as st
 
 from telecom_rag.config import (
     CLOUDFLARE_MODEL,
+    CLOUDFLARE_ROUTER_MODEL,
     MAX_QUESTION_CHARS,
     MAX_REQUEST_UNITS_PER_SESSION,
     MAX_TOP_K_PUBLIC,
@@ -52,6 +53,7 @@ for secret_name in (
     "CLOUDFLARE_ACCOUNT_ID",
     "CLOUDFLARE_API_TOKEN",
     "CLOUDFLARE_MODEL",
+    "CLOUDFLARE_ROUTER_MODEL",
     "CLOUDFLARE_EMBEDDING_MODEL",
     "CLOUDFLARE_RERANKER_MODEL",
     "USE_CLOUDFLARE_RETRIEVAL",
@@ -85,8 +87,12 @@ def cached_retriever(backend: str):
 
 
 @st.cache_resource(show_spinner=False)
-def cached_llm(provider: str, model: str):
-    return get_llm(provider=provider, model=model)
+def cached_llm(provider: str, model: str, max_output_tokens: int | None = None):
+    return get_llm(
+        provider=provider,
+        model=model,
+        max_output_tokens=max_output_tokens,
+    )
 
 
 @st.cache_data(show_spinner=False)
@@ -501,7 +507,9 @@ with st.sidebar:
         provider = "cloudflare"
         model = os.getenv("CLOUDFLARE_MODEL", CLOUDFLARE_MODEL)
         st.success("Hosted LLM configured")
-        st.caption(f"Provider: Cloudflare Workers AI · Model: {model}")
+        router_model = os.getenv("CLOUDFLARE_ROUTER_MODEL", CLOUDFLARE_ROUTER_MODEL)
+        st.caption(f"Generator: {model}")
+        st.caption(f"Semantic router: {router_model}")
     elif openai_available:
         provider = "openai"
         model = os.getenv("OPENAI_MODEL", OPENAI_MODEL)
@@ -801,9 +809,19 @@ if run:
     try:
         retriever = cached_retriever(storage_backend)
         llm = cached_llm(provider, model)
+        router_llm = (
+            cached_llm(
+                "cloudflare",
+                os.getenv("CLOUDFLARE_ROUTER_MODEL", CLOUDFLARE_ROUTER_MODEL),
+                8,
+            )
+            if provider == "cloudflare"
+            else llm
+        )
         graph = build_graph(
             llm,
             retriever,
+            router_llm=router_llm,
             reference_df=kpis,
             top_k=top_k,
             retrieval_mode=retrieval_mode,
@@ -926,6 +944,7 @@ if run:
             baseline_graph = build_graph(
                 llm,
                 retriever,
+                router_llm=router_llm,
                 reference_df=kpis,
                 top_k=top_k,
                 retrieval_mode=retrieval_mode,
