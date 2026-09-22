@@ -12,7 +12,7 @@ DOCS_DIR = PROJECT_ROOT / "docs" / "corpus"
 VECTOR_STORE_DIR = PROJECT_ROOT / "vector_store"
 EVAL_PATH = PROJECT_ROOT / "eval" / "questions.json"
 
-# Retrieval stack. BGE is retrieval-specific while remaining small enough for CPU demos.
+# Local retrieval stack.
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 RERANKER_MODEL = os.getenv(
     "RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L6-v2"
@@ -22,8 +22,8 @@ BGE_QUERY_PREFIX = os.getenv(
     "Represent this sentence for searching relevant passages: ",
 )
 
-# ~400-token chunks are a better fit for the 512-token embedding window than the
-# previous 1200-character baseline, while still giving technical definitions context.
+# Chunk sizing stays within the embedding model's context window while preserving
+# enough surrounding technical context for standards and engineering documents.
 CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "1700"))
 CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "250"))
 CHUNKING_VERSION = "section-aware-v2"
@@ -36,16 +36,13 @@ RRF_K = int(os.getenv("RAG_RRF_K", "60"))
 
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
 
-# Hosted inference for the public demo. Workers AI exposes an
-# OpenAI-compatible Chat Completions endpoint, so the LangChain interface stays shared.
+# Hosted inference. Workers AI exposes an OpenAI-compatible Chat Completions endpoint,
+# so the LangChain interface is shared with the rest of the application.
 CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID", "")
 CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN", "")
 CLOUDFLARE_GENERATOR_MODEL = os.getenv(
     "CLOUDFLARE_GENERATOR_MODEL", "@cf/google/gemma-4-26b-a4b-it"
 )
-# Backward-compatible internal alias. Public configuration should use
-# CLOUDFLARE_GENERATOR_MODEL so stale legacy CLOUDFLARE_MODEL secrets do not override it.
-CLOUDFLARE_MODEL = CLOUDFLARE_GENERATOR_MODEL
 CLOUDFLARE_ROUTER_MODEL = os.getenv(
     "CLOUDFLARE_ROUTER_MODEL", "@cf/zai-org/glm-4.7-flash"
 )
@@ -62,7 +59,7 @@ USE_CLOUDFLARE_RETRIEVAL = os.getenv(
 # Optional paid fallback.
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 
-# Public-demo safety defaults. Environment variables can tighten these further.
+# Hosted-application safety defaults.
 MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "1400"))
 MAX_QUESTION_CHARS = int(os.getenv("MAX_QUESTION_CHARS", "700"))
 MAX_REQUEST_UNITS_PER_SESSION = int(os.getenv("MAX_REQUEST_UNITS_PER_SESSION", "12"))
