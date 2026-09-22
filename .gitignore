@@ -9,6 +9,10 @@ data/processed/*
 docs/corpus/*
 !docs/corpus/.gitkeep
 
+# Generated evaluation outputs
+eval/results/*
+!eval/results/.gitkeep
+
 # Generated vector indexes
 vector_store/
 *.faiss
@@ -17,17 +21,23 @@ vector_store/
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .venv/
 venv/
+.pytest_cache/
+.ruff_cache/
 
 # Secrets / local config
 .env
+.env.*
+!.env.example
 .streamlit/secrets.toml
 
 # Jupyter
 .ipynb_checkpoints/
 
-# OS / editor
+# Logs / OS / editor
+*.log
 .DS_Store
 .vscode/
 .idea/
