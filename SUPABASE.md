@@ -1,6 +1,6 @@
 # Supabase backend
 
-Supabase is the hosted persistence and retrieval backend for the public Streamlit demo.
+Supabase is the hosted persistence and retrieval backend for the hosted Streamlit application.
 
 The local/notebook path does not require Supabase.
 
