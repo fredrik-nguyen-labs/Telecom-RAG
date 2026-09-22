@@ -125,9 +125,12 @@ SUGGESTED_QUESTIONS = [
     "Why might this measurement have this throughput?",
     "Which radio measurements should I investigate first?",
     "What stands out about this measurement?",
-    "Does the SINR look consistent with the throughput?",
-    "How do RSRP, SINR, CQI and MCS relate to each other?",
-    "What could cause low throughput even when signal strength looks reasonable?",
+    "What is the difference between RSRP and SINR?",
+    "How do CQI and MCS affect data rate?",
+    "What is beamforming in 5G and why is it useful?",
+    "How does 5G NSA differ from standalone 5G?",
+    "What does rank indicator mean in MIMO?",
+    "Why can throughput be low even with strong signal strength?",
 ]
 
 if "chat_draft" not in st.session_state:
