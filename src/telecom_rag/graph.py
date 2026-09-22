@@ -21,6 +21,7 @@ class AppState(TypedDict, total=False):
     retrieval_mode: str
     retrieved_docs: list[Any]
     answer: str
+    answer_sections: dict[str, str]
     sources: list[dict[str, Any]]
     latency_s: float
     retrieval_latency_s: float
