@@ -208,7 +208,7 @@ def get_llm(
     model: str | None = None,
     max_output_tokens: int | None = None,
 ) -> BaseChatModel:
-    """Return a deterministic, bounded-output chat model for the demo."""
+    """Return a deterministic, bounded-output chat model for the application."""
     provider = provider.lower().strip()
     output_limit = max_output_tokens or MAX_OUTPUT_TOKENS
     if provider == "ollama":
