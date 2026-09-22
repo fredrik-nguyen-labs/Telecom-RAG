@@ -34,24 +34,24 @@ class AppState(TypedDict, total=False):
 
 
 DEFINITION_INTENT_RE = re.compile(
-    r"\\b(?:what\\s+does\\s+.+?\\s+stand\\s+for|"
-    r"what\\s+is\\s+(?:an?\\s+)?(?:rsrp|sinr|cqi|mcs|rsrq)|"
-    r"define\\s+(?:rsrp|sinr|cqi|mcs|rsrq)|"
-    r"(?:meaning|definition)\\s+of\\s+(?:rsrp|sinr|cqi|mcs|rsrq)|"
-    r"what\\s+does\\s+(?:rsrp|sinr|cqi|mcs|rsrq)\\s+mean)\\b",
+    r"\b(?:what\s+does\s+.+?\s+stand\s+for|"
+    r"what\s+is\s+(?:an?\s+)?(?:rsrp|sinr|cqi|mcs|rsrq)|"
+    r"define\s+(?:rsrp|sinr|cqi|mcs|rsrq)|"
+    r"(?:meaning|definition)\s+of\s+(?:rsrp|sinr|cqi|mcs|rsrq)|"
+    r"what\s+does\s+(?:rsrp|sinr|cqi|mcs|rsrq)\s+mean)\b",
     flags=re.IGNORECASE,
 )
 
 OBSERVATION_REFERENCE_RE = re.compile(
-    r"\\b(?:this|these|selected|current)\\s+"
+    r"\b(?:this|these|selected|current)\s+"
     r"(?:observation|measurement|row|sample|values?|kpis?|"
-    r"throughput|rsrp|sinr|cqi|mcs|rsrq)\\b",
+    r"throughput|rsrp|sinr|cqi|mcs|rsrq)\b",
     flags=re.IGNORECASE,
 )
 
 DIAGNOSTIC_REFERENCE_RE = re.compile(
-    r"\\b(?:diagnose|investigate|analy[sz]e|explain)\\s+"
-    r"(?:this|these|the\\s+selected|the\\s+current)\\b",
+    r"\b(?:diagnose|investigate|analy[sz]e|explain)\s+"
+    r"(?:this|these|the\s+selected|the\s+current)\b",
     flags=re.IGNORECASE,
 )
 
