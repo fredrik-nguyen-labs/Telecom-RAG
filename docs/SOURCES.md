@@ -51,18 +51,8 @@ The downloader currently configures **10 sources**.
 10. **Ericsson Mobility Report, June 2025**  
     https://www.ericsson.com/49e9b6/assets/local/reports-papers/mobility-report/documents/2025/ericsson-mobility-report-june-2025.pdf
 
-## Why the corpus was expanded
-
-The original four-source corpus was good for definitions but weak for diagnosis. Questions such as “why might throughput be poor despite reasonable signal strength?” benefit from material about traffic, coverage/capacity, beamforming, and real-world network performance.
-
-The retrieval system still remains intentionally small enough to inspect manually.
-
 ## Reproducibility
 
-Downloaded third-party files are ignored by Git. The repository stores:
+Downloaded third-party documents are excluded from Git. The repository stores the source list and downloader so the corpus can be reconstructed. A local `docs/corpus/_sources.json` manifest records successful downloads and SHA-256 hashes.
 
-- this source list,
-- `scripts/download_docs.py`,
-- a generated local `docs/corpus/_sources.json` manifest containing successful downloads and SHA-256 hashes.
-
-If one external site is temporarily unavailable, the downloader continues with the other sources. The app requires at least four successfully downloaded documents to build the RAG index.
+If an external source is temporarily unavailable, the downloader continues with the remaining sources.
