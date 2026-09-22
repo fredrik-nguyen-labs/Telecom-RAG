@@ -373,6 +373,8 @@ _SECTION_RE = re.compile(
     r"(Answer|Measured evidence|Observation evidence|Technical interpretation|"
     r"Hypothesis|Hypotheses)\s*:?[ \t]*$"
 )
+
+
 def parse_answer_sections(text: str) -> dict[str, str]:
     """Parse the model's stable Markdown section contract for card-based rendering."""
     matches = list(_SECTION_RE.finditer(text))
@@ -436,9 +438,7 @@ def answer_with_rag(
     answer_text = message_text(response.content)
     if not answer_text:
         raise RuntimeError(
-            "The hosted model returned no visible answer text. "
-            "Reasoning is disabled for application calls to prevent hidden reasoning "
-            "from consuming the output budget."
+            "The hosted model returned no visible answer text."
         )
 
     latency = time.perf_counter() - start
