@@ -8,7 +8,7 @@ import pandas as pd
 from langchain_core.language_models.chat_models import BaseChatModel
 from langgraph.graph import END, START, StateGraph
 
-from .kpi import summarize_observation
+from .kpi import analyze_observation
 from .rag import answer_with_rag, answer_without_rag
 from .retrieval import RetrieverProtocol, build_retrieval_query
 
@@ -18,6 +18,7 @@ class AppState(TypedDict, total=False):
     use_rag: bool
     observation: dict[str, Any] | None
     kpi_context: str
+    kpi_analysis: dict[str, Any]
     retrieval_query: str
     retrieval_mode: str
     retrieved_docs: list[Any]
@@ -110,9 +111,13 @@ def build_graph(
 
     def analyze_kpi_node(state: AppState) -> AppState:
         if reference_df is None or not state.get("observation"):
-            return {"kpi_context": ""}
+            return {"kpi_context": "", "kpi_analysis": {}}
         row = pd.Series(state["observation"])
-        return {"kpi_context": summarize_observation(row, reference_df)}
+        analysis = analyze_observation(row, reference_df)
+        return {
+            "kpi_context": str(analysis.get("context", "")),
+            "kpi_analysis": analysis,
+        }
 
     def retrieve_node(state: AppState) -> AppState:
         query = build_retrieval_query(
