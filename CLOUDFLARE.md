@@ -5,7 +5,8 @@ Telecom-RAG can use Cloudflare Workers AI for hosted generation, query embedding
 The default hosted models are:
 
 ```text
-generation:  @cf/meta/llama-3.2-3b-instruct
+router:      @cf/zai-org/glm-4.7-flash
+generation:  @cf/google/gemma-4-26b-a4b-it
 embeddings:  @cf/baai/bge-small-en-v1.5
 reranker:    @cf/baai/bge-reranker-base
 ```
@@ -34,7 +35,8 @@ Linux/macOS:
 ```bash
 export CLOUDFLARE_ACCOUNT_ID="..."
 export CLOUDFLARE_API_TOKEN="..."
-export CLOUDFLARE_MODEL="@cf/meta/llama-3.2-3b-instruct"
+export CLOUDFLARE_GENERATOR_MODEL="@cf/google/gemma-4-26b-a4b-it"
+export CLOUDFLARE_ROUTER_MODEL="@cf/zai-org/glm-4.7-flash"
 export CLOUDFLARE_EMBEDDING_MODEL="@cf/baai/bge-small-en-v1.5"
 export CLOUDFLARE_RERANKER_MODEL="@cf/baai/bge-reranker-base"
 export USE_CLOUDFLARE_RETRIEVAL=true
@@ -45,7 +47,8 @@ PowerShell:
 ```powershell
 $env:CLOUDFLARE_ACCOUNT_ID="..."
 $env:CLOUDFLARE_API_TOKEN="..."
-$env:CLOUDFLARE_MODEL="@cf/meta/llama-3.2-3b-instruct"
+$env:CLOUDFLARE_GENERATOR_MODEL="@cf/google/gemma-4-26b-a4b-it"
+export CLOUDFLARE_ROUTER_MODEL="@cf/zai-org/glm-4.7-flash"
 $env:CLOUDFLARE_EMBEDDING_MODEL="@cf/baai/bge-small-en-v1.5"
 $env:CLOUDFLARE_RERANKER_MODEL="@cf/baai/bge-reranker-base"
 $env:USE_CLOUDFLARE_RETRIEVAL="true"
@@ -75,7 +78,9 @@ CLOUDFLARE_API_TOKEN
 ```
 
 When both exist, its generation evaluation selects the Cloudflare provider instead of
-local Ollama.
+local Ollama. The hosted Streamlit app additionally uses the dedicated GLM router model;
+Notebook 02 keeps one generator model by default so its retrieval/generation evaluation
+remains easy to reproduce.
 
 You can verify it in the notebook cell that prints:
 
@@ -95,7 +100,8 @@ Add the same values to **App settings → Secrets**:
 ```toml
 CLOUDFLARE_ACCOUNT_ID = "..."
 CLOUDFLARE_API_TOKEN = "..."
-CLOUDFLARE_MODEL = "@cf/meta/llama-3.2-3b-instruct"
+CLOUDFLARE_GENERATOR_MODEL = "@cf/google/gemma-4-26b-a4b-it"
+CLOUDFLARE_ROUTER_MODEL = "@cf/zai-org/glm-4.7-flash"
 CLOUDFLARE_EMBEDDING_MODEL = "@cf/baai/bge-small-en-v1.5"
 CLOUDFLARE_RERANKER_MODEL = "@cf/baai/bge-reranker-base"
 USE_CLOUDFLARE_RETRIEVAL = "true"
@@ -115,3 +121,22 @@ pgvector + PostgreSQL FTS
 
 If the optional reranker times out or is temporarily unavailable, the request falls back
 to the already-fused RRF ranking instead of failing the whole RAG request.
+
+
+## Model choices
+
+The public app separates routing from answer generation:
+
+- `@cf/zai-org/glm-4.7-flash` handles the tiny semantic route decision.
+- `@cf/google/gemma-4-26b-a4b-it` handles the final grounded answer.
+
+This avoids spending a large model call on a one-token routing decision while giving the
+answer stage substantially more capability than the original Llama 3.2 3B setup.
+
+For a quality-first experiment, you can override only the generator:
+
+```bash
+export CLOUDFLARE_GENERATOR_MODEL="@cf/openai/gpt-oss-120b"
+```
+
+The rest of the retrieval/router architecture stays unchanged.
