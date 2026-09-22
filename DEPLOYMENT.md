@@ -81,7 +81,7 @@ Use:
 ```text
 Repository:     fredrik-nguyen-labs/Telecom-RAG
 Branch:         main
-Main file:      app.py
+Main file:      deploy/app.py
 Python version: 3.12
 ```
 
@@ -113,9 +113,16 @@ The public app needs only the low-privilege Supabase publishable key.
 
 Click **Deploy**.
 
-When Supabase is configured and seeded, a new Streamlit container does **not** need to redownload the telecom corpus or rebuild the FAISS index. The persistent document chunks, embeddings, and KPI rows are read from Supabase.
+The `deploy/app.py` entrypoint uses `deploy/requirements.txt`, so Community Cloud does
+**not** install the local research stack (PyTorch, SentenceTransformers, FAISS,
+scikit-learn, PyMuPDF, Jupyter, etc.).
 
-The first retrieval request still loads the small local BGE query-embedding model and cross-encoder reranker.
+When Supabase is configured and seeded, the Streamlit container reads document chunks,
+vectors, and KPI rows from Supabase. Query embeddings and cross-encoder reranking are
+served by Cloudflare Workers AI, so no local ML model is loaded in Streamlit.
+
+The root `app.py` remains the local-development entrypoint and retains the reproducible
+FAISS/Ollama fallback.
 
 If Supabase is unavailable or not seeded, the app retains the reproducible local FAISS/BM25 fallback.
 
@@ -184,6 +191,11 @@ If Supabase is unavailable, the app may try the local corpus/FAISS path. Inspect
 Streamlit Community Cloud watches the connected `main` branch.
 
 Code changes pushed to `main` update the app automatically.
+
+The lightweight deployment uses `deploy/app.py` as its GitHub entrypoint. Changing an
+already-deployed app from the old root `app.py` coordinate to `deploy/app.py` requires
+a one-time delete/redeploy in Streamlit Community Cloud. After that, normal code changes
+again update automatically.
 
 If the **corpus, chunking, embedding model, or KPI table changes**, rerun:
 
