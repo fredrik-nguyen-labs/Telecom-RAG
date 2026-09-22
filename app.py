@@ -190,14 +190,14 @@ def _citation_claims(answer: str) -> tuple[list[str], dict[str, list[str]]]:
 
     spans = [
         span.strip()
-        for span in re.split(r"(?<=[.!?])\\s+|\\n+", answer)
+        for span in re.split(r"(?<=[.!?])\s+|\n+", answer)
         if span.strip()
     ]
     for span in spans:
-        citation_ids = [f"S{n}" for n in re.findall(r"\\[S(\\d+)\\]", span)]
+        citation_ids = [f"S{n}" for n in re.findall(r"\[S(\d+)\]", span)]
         if not citation_ids:
             continue
-        clean_claim = re.sub(r"\\s+", " ", span).strip()
+        clean_claim = re.sub(r"\s+", " ", span).strip()
         for citation_id in citation_ids:
             if citation_id not in order:
                 order.append(citation_id)
