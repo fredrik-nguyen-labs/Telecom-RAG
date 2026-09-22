@@ -207,6 +207,48 @@ def _citation_claims(answer: str) -> tuple[list[str], dict[str, list[str]]]:
     return order, claims
 
 
+def _render_answer_cards(result: dict) -> None:
+    """Render the model contract as distinct, easy-to-scan evidence cards."""
+    sections = result.get("answer_sections") or {}
+    if not sections:
+        sections = {"answer": result.get("answer", "")}
+
+    if sections.get("answer"):
+        with st.container(border=True):
+            st.markdown("### ✅ Answer")
+            st.markdown(sections["answer"])
+
+    secondary = []
+    if sections.get("measured_evidence"):
+        secondary.append(("📊 Measured evidence", sections["measured_evidence"]))
+    if sections.get("technical_interpretation"):
+        secondary.append(
+            ("📚 Technical interpretation", sections["technical_interpretation"])
+        )
+
+    if len(secondary) == 2:
+        cols = st.columns(2)
+        for col, (title, body) in zip(cols, secondary):
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"### {title}")
+                    st.markdown(body)
+    else:
+        for title, body in secondary:
+            with st.container(border=True):
+                st.markdown(f"### {title}")
+                st.markdown(body)
+
+    if sections.get("hypotheses"):
+        with st.container(border=True):
+            st.markdown("### 🧭 Hypotheses")
+            st.markdown(sections["hypotheses"])
+            st.caption(
+                "Hypotheses are possible explanations, not measured facts. "
+                "They are shown only for KPI-diagnostic questions."
+            )
+
+
 def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
     """Show only sources actually cited by the answer, with claim and exact chunk."""
     if not sources:
@@ -474,6 +516,10 @@ with left:
             hide_index=True,
             use_container_width=True,
         )
+        st.caption(
+            "The selected row is only used when your question explicitly refers to "
+            "this observation/measurement or asks to diagnose it."
+        )
 
 
 with right:
@@ -556,8 +602,13 @@ if run:
                 except Exception:
                     pass
 
-        st.subheader("Answer")
-        st.markdown(result["answer"])
+        route_label = (
+            "KPI diagnosis + technical documents"
+            if result.get("route") == "kpi+docs"
+            else "Technical documents only"
+        )
+        st.caption(f"Workflow: **{route_label}**")
+        _render_answer_cards(result)
 
         if use_rag:
             _render_cited_evidence(
@@ -566,7 +617,10 @@ if run:
             )
 
         meta_cols = st.columns(6)
-        meta_cols[0].metric("Route", result.get("route", "-"))
+        meta_cols[0].metric(
+            "Route",
+            "KPI + docs" if result.get("route") == "kpi+docs" else "Docs only",
+        )
         meta_cols[1].metric("RAG", "On" if use_rag else "Off")
         meta_cols[2].metric("Storage", "Supabase" if using_supabase else "Local")
         meta_cols[3].metric(
