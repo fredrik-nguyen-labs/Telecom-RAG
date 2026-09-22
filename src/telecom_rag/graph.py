@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import time
 from typing import Any, Literal, TypedDict
 
@@ -37,22 +36,30 @@ class AppState(TypedDict, total=False):
     router_usage: dict[str, int]
 
 
-ROUTER_SYSTEM_PROMPT = """You are an intent router for a telecom RAG application.
+ROUTER_SYSTEM_PROMPT = """You are the semantic intent router for a telecom analysis app.
 
-Choose exactly one route:
+There are two possible routes:
 
-- docs-only: the question can be answered from telecom knowledge/technical documents
-  without analyzing the currently available KPI observation or the reference KPI dataset.
-- kpi+docs: answering the question requires or materially benefits from analyzing the
-  available KPI values or statistics from the reference dataset. This includes diagnosis,
-  comparison, anomaly/outlier analysis, correlations/relationships/patterns in the data,
-  expected-vs-actual behavior, or indirect references such as "the values given".
+KPI
+Use this when answering the user's question requires or materially benefits from
+analyzing the available KPI observation or statistics from the reference KPI dataset.
+This includes diagnosis, comparison, anomaly/outlier analysis, correlations or other
+relationships/patterns in the supplied data, expected-vs-actual behavior, or indirect
+references to supplied measurements such as "the values given".
 
-A selected observation being available is NOT enough by itself to choose kpi+docs.
-Generic conceptual questions should remain docs-only even when they mention KPI names.
+DOCS
+Use this when the question is asking for general telecom knowledge, definitions,
+standards, mechanisms, or conceptual relationships that can be answered from technical
+documents without examining the supplied observation or dataset statistics.
 
-Return one compact JSON object and nothing else:
-{"route":"docs-only"|"kpi+docs","reason":"short explanation"}
+Important:
+- The mere presence of a selected observation does not make a question KPI.
+- Decide from the meaning and context of the question, not exact keywords.
+- If the user is asking about relationships/correlations visible in the provided data,
+  choose KPI.
+- If the user is asking how two telecom concepts generally relate in theory, choose DOCS.
+
+Return exactly one token: KPI or DOCS.
 """
 
 
@@ -73,21 +80,12 @@ def _observation_schema(observation: dict[str, Any] | None) -> str:
 
 
 def _parse_router_response(content: Any) -> tuple[str, str] | None:
-    text = str(content).strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.lower().startswith("json"):
-            text = text[4:].strip()
-    try:
-        payload = json.loads(text)
-    except json.JSONDecodeError:
-        return None
-
-    route = str(payload.get("route", "")).strip().lower()
-    reason = str(payload.get("reason", "")).strip()
-    if route not in {"docs-only", "kpi+docs"}:
-        return None
-    return route, reason or "semantic intent classification"
+    text = str(content).strip().upper()
+    if text == "KPI":
+        return "kpi+docs", "semantic router selected KPI/data analysis"
+    if text == "DOCS":
+        return "docs-only", "semantic router selected technical-document analysis"
+    return None
 
 
 def _docs_only_answer(sections: dict[str, str]) -> tuple[str, dict[str, str]]:
@@ -139,7 +137,8 @@ def build_graph(
         )
         started = time.perf_counter()
         try:
-            response = llm.invoke(
+            router_llm = llm.bind(max_tokens=4)
+            response = router_llm.invoke(
                 [
                     SystemMessage(content=ROUTER_SYSTEM_PROMPT),
                     HumanMessage(content=user_prompt),
