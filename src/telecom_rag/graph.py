@@ -15,6 +15,7 @@ from .retrieval import RetrieverProtocol, build_retrieval_query
 
 class AppState(TypedDict, total=False):
     question: str
+    conversation_context: str
     use_rag: bool
     observation: dict[str, Any] | None
     kpi_context: str
@@ -143,10 +144,11 @@ def build_graph(
                 "router_latency_s": 0.0,
             }
 
-        user_prompt = (
-            f"Question:\n{state['question']}\n\n"
-            f"Available context:\n{_observation_schema(observation)}"
-        )
+        conversation = state.get("conversation_context", "").strip()
+        user_prompt = f"Question:\n{state['question']}\n\n"
+        if conversation:
+            user_prompt += f"Recent conversation:\n{conversation}\n\n"
+        user_prompt += f"Available context:\n{_observation_schema(observation)}"
         started = time.perf_counter()
         try:
             response = routing_model.invoke(
@@ -190,8 +192,14 @@ def build_graph(
         }
 
     def retrieve_node(state: AppState) -> AppState:
+        retrieval_question = state["question"]
+        conversation = state.get("conversation_context", "").strip()
+        if conversation:
+            retrieval_question = (
+                f"{retrieval_question}\nFollow-up context:\n{conversation}"
+            )
         query = build_retrieval_query(
-            state["question"],
+            retrieval_question,
             observation=state.get("observation") if state.get("route") == "kpi+docs" else None,
         )
         if not state.get("use_rag", True):
@@ -219,6 +227,7 @@ def build_graph(
                 state.get("retrieved_docs", []),
                 state.get("kpi_context", ""),
                 use_kpi_context=state.get("route") == "kpi+docs",
+                conversation_context=state.get("conversation_context", ""),
             )
         else:
             result = answer_without_rag(
