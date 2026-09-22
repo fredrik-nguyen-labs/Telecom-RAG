@@ -20,7 +20,7 @@ from .config import (
     CHUNK_SIZE,
     CLOUDFLARE_ACCOUNT_ID,
     CLOUDFLARE_API_TOKEN,
-    CLOUDFLARE_MODEL,
+    CLOUDFLARE_GENERATOR_MODEL,
     EMBEDDING_MODEL,
     MAX_OUTPUT_TOKENS,
     OLLAMA_MODEL,
@@ -232,7 +232,7 @@ def get_llm(
 
         return ChatOpenAI(
             model=model
-            or os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_MODEL),
+            or os.getenv("CLOUDFLARE_GENERATOR_MODEL", CLOUDFLARE_GENERATOR_MODEL),
             api_key=api_token,
             base_url=(
                 "https://api.cloudflare.com/client/v4/accounts/"
