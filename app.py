@@ -552,8 +552,9 @@ with left:
             )
     else:
         st.caption(
-            "Enter only the KPIs you know. Blank fields are ignored. Values are compared "
-            "with the real Ericsson/AERPAW dataset when KPI analysis is used."
+            "Example KPI values are prefilled. Edit them to match your measurement, or "
+            "clear any values you do not know. They are compared with the real "
+            "Ericsson/AERPAW dataset when KPI analysis is used."
         )
 
         custom_left, custom_right = st.columns(2)
