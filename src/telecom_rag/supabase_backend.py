@@ -156,7 +156,6 @@ class CloudflareQueryEmbeddings:
                     json={
                         "text": query,
                         "pooling": "cls",
-                        "options": {"rejectIfBusy": True},
                     },
                     timeout=min(self.timeout, 15.0),
                 )
