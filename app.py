@@ -497,6 +497,32 @@ top_k = TOP_K
 
 observation = None
 
+chat_header_cols = st.columns([6, 1])
+with chat_header_cols[0]:
+    st.subheader("Conversation")
+with chat_header_cols[1]:
+    if st.session_state.chat_messages:
+        if st.button("New chat", use_container_width=True):
+            st.session_state.chat_messages = []
+            st.session_state.chat_draft = DEFAULT_CHAT_QUESTION
+            st.session_state.pop("pending_chat_question", None)
+            st.rerun()
+
+chat_panel = st.container(height=400)
+with chat_panel:
+    if not st.session_state.chat_messages:
+        st.caption("Your conversation will appear here.")
+    for message in st.session_state.chat_messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            if message["role"] == "assistant":
+                _render_cited_evidence(
+                    message["content"],
+                    message.get("sources", []),
+                )
+
+st.divider()
+
 left, right = st.columns([1, 1])
 
 with left:
@@ -618,16 +644,7 @@ with left:
 
 
 with right:
-    header_cols = st.columns([4, 1])
-    with header_cols[0]:
-        st.subheader("2. Conversation")
-    with header_cols[1]:
-        if st.session_state.chat_messages:
-            if st.button("New chat", use_container_width=True):
-                st.session_state.chat_messages = []
-                st.session_state.chat_draft = DEFAULT_CHAT_QUESTION
-                st.session_state.pop("pending_chat_question", None)
-                st.rerun()
+    st.subheader("2. Ask a question")
 
     units_needed = 1
     run_disabled = units_needed > remaining_units
@@ -648,20 +665,6 @@ with right:
         disabled=run_disabled,
         on_click=_queue_chat_message,
     )
-
-    st.caption("Conversation")
-    chat_panel = st.container(height=460)
-    with chat_panel:
-        if not st.session_state.chat_messages:
-            st.caption("Your conversation will appear here.")
-        for message in st.session_state.chat_messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-                if message["role"] == "assistant":
-                    _render_cited_evidence(
-                        message["content"],
-                        message.get("sources", []),
-                    )
 
 question = st.session_state.pop("pending_chat_question", "")
 run = bool(question)
