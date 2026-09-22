@@ -1,7 +1,6 @@
 # Supabase backend
 
-Supabase is the hosted persistence and retrieval backend for the hosted Streamlit application.
-
+Supabase is the persistence and retrieval backend for the hosted Streamlit application.
 The local/notebook path does not require Supabase.
 
 ## Architecture
@@ -12,7 +11,7 @@ Cloudflare BGE query embedding
           v
 Supabase Postgres
 ├── KPI observations
-├── pgvector / HNSW dense retrieval
+├── pgvector/HNSW dense retrieval
 └── PostgreSQL full-text retrieval
           |
           v
@@ -22,23 +21,21 @@ reciprocal-rank fusion
 Cloudflare BGE reranker
 ```
 
-The schema uses `BAAI/bge-small-en-v1.5` embeddings with **384 dimensions**.
+The document vectors use BGE-small embeddings with 384 dimensions.
 
 ## 1. Create a project
 
 Create a Supabase project and obtain:
 
-- Project URL
+- project URL
 - publishable key
-- secret key
+- secret/admin key for trusted synchronization only
 
 The public Streamlit app uses only the publishable key.
 
-The secret key is used only from a trusted environment when seeding the database.
-
 ## 2. Apply the migration
 
-Open the Supabase SQL Editor and run:
+Run this file in the Supabase SQL Editor:
 
 ```text
 supabase/migrations/20260921130000_init_telecom_rag.sql
@@ -48,59 +45,63 @@ It creates:
 
 - `document_chunks`
 - `kpi_observations`
-- a pgvector HNSW index
-- a PostgreSQL full-text GIN index
-- constrained dense/hybrid retrieval RPCs
-- a status RPC
+- pgvector HNSW index
+- PostgreSQL FTS GIN index
+- constrained dense/hybrid search RPCs
+- backend status RPC
 - Row Level Security policies
 
 ## 3. Seed the database
 
-Set admin credentials in a trusted shell:
+From a trusted environment:
 
 ```bash
 export SUPABASE_URL="https://YOUR_PROJECT_REF.supabase.co"
 export SUPABASE_SECRET_KEY="..."
-```
 
-Then:
-
-```bash
 uv sync
 uv run python scripts/sync_supabase.py
 ```
 
-Useful partial syncs:
+Partial syncs:
 
 ```bash
 uv run python scripts/sync_supabase.py --skip-kpis
 uv run python scripts/sync_supabase.py --skip-docs
 ```
 
-Rerun the sync whenever the corpus, chunking/embedding configuration, or KPI table changes.
+Rerun synchronization whenever the corpus, embedding/chunking configuration or KPI table
+changes.
 
-## 4. Test the hosted backend locally
+## 4. Runtime configuration
 
-Use the low-privilege runtime key:
+Use the low-privilege key:
 
 ```bash
 export USE_SUPABASE=true
 export SUPABASE_URL="https://YOUR_PROJECT_REF.supabase.co"
 export SUPABASE_PUBLISHABLE_KEY="..."
-uv run streamlit run app.py
 ```
 
-For the full hosted retrieval path, also configure Cloudflare as described in
-[CLOUDFLARE.md](CLOUDFLARE.md).
+Configure Cloudflare as described in [CLOUDFLARE.md](CLOUDFLARE.md) for the full hosted
+retrieval path.
 
 ## Security model
 
 The public runtime can:
 
-- read the public KPI observations,
-- call constrained document-search RPCs,
+- read public KPI observations;
+- call constrained search RPCs;
 - call the backend status RPC.
 
-It cannot directly read the raw `document_chunks` table through the public Data API.
+It cannot use the admin synchronization path. Do not expose `SUPABASE_SECRET_KEY` in
+Streamlit secrets or client-side code.
 
-Do not expose `SUPABASE_SECRET_KEY` in Streamlit secrets or client-side code.
+## Conversation storage
+
+Chat history is **not stored in Supabase**. The conversation exists only in Streamlit
+session state. Supabase stores the reference KPI observations and RAG document chunks, not
+user conversations.
+
+This is intentional for the public portfolio demo: it enables follow-up questions without
+requiring user accounts or persistent chat storage.
