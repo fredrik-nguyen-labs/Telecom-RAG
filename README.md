@@ -147,3 +147,8 @@ Detailed setup:
 - [DEPLOYMENT.md](DEPLOYMENT.md)
 - [SUPABASE.md](SUPABASE.md)
 - [CLOUDFLARE.md](CLOUDFLARE.md)
+
+
+## License
+
+[MIT License](LICENSE)
