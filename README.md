@@ -1,9 +1,10 @@
 # Telecom-RAG
 
-**Current live demo (Streamlit):** https://telecom-rag-3yyu7bhzs5ebhutyyserwy.streamlit.app/
+**Web app:** https://telecom.fnsystems.dev  
+**Streamlit fallback:** https://telecom-rag-3yyu7bhzs5ebhutyyserwy.streamlit.app/
 
-A React + FastAPI web deployment now lives alongside the Streamlit app in this
-repository. Streamlit remains the public fallback while the new deployment is validated.
+The production web stack uses a React/Vite frontend with a FastAPI API. The original
+Streamlit app remains available as a fallback while the new deployment is validated.
 
 Telecom-RAG is a 5G network diagnostics assistant that combines structured radio KPI
 analysis with retrieval-augmented generation over telecom standards and technical
@@ -69,13 +70,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the detailed request flow.
 
 Conversation memory is deliberately session-scoped.
 
-- Recent user/assistant turns are stored in Streamlit `session_state`.
+- The React frontend keeps the current thread in browser memory; Streamlit uses
+  `session_state`.
 - Up to the latest eight messages are supplied as bounded follow-up context.
-- **New chat** clears the conversation and restores the default starter question.
-- Chat history is **not persisted to Supabase** and is not remembered in a later browser
-  session or after the Streamlit session is lost.
-- KPI controls are separate UI state; clearing the conversation does not intentionally
-  clear the selected/entered measurement.
+- **New chat** clears the conversation while preserving the selected KPI context.
+- Chat history is **not persisted to Supabase** and is not remembered after the browser
+  session is lost.
 
 This keeps the demo conversational without introducing user accounts or persistent chat
 storage.
@@ -144,7 +144,7 @@ See [docs/SOURCES.md](docs/SOURCES.md) for the source inventory and provenance.
 app.py                       current Streamlit UI and session conversation
 frontend/                     React + Vite web frontend
 backend/                      FastAPI service reusing the same RAG core
-render.yaml                   Render blueprint for the FastAPI service
+render.yaml                   Render blueprint for API + static frontend
 src/telecom_rag/
   graph.py                   LangGraph routing/retrieval/generation workflow
   kpi.py                     deterministic KPI analysis
@@ -207,15 +207,15 @@ React/Vite frontend
 Supabase + Cloudflare Workers AI
 ```
 
-The React frontend is static and can be hosted on Cloudflare Pages. The FastAPI service is
-configured for Render through `render.yaml`. Both paths reuse the same Supabase data and
-Cloudflare model stack; the Streamlit deployment remains available during migration.
+Both the static React frontend and FastAPI API are configured on Render through
+`render.yaml`. The API uses Supabase for hosted retrieval and Cloudflare Workers AI for
+model inference. The Streamlit deployment remains available as a fallback.
 
 Setup guides:
 
-- [DEPLOYMENT.md](DEPLOYMENT.md)
-- [SUPABASE.md](SUPABASE.md)
-- [CLOUDFLARE.md](CLOUDFLARE.md)
+- [Deployment](docs/DEPLOYMENT.md)
+- [Supabase](docs/SUPABASE.md)
+- [Cloudflare Workers AI](docs/CLOUDFLARE.md)
 
 The public runtime uses only the low-privilege Supabase publishable key. The secret/admin
 key is required only for trusted database synchronization and must never be exposed in
