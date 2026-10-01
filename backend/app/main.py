@@ -28,6 +28,10 @@ from telecom_rag.config import (  # noqa: E402
 )
 from telecom_rag.graph import build_graph  # noqa: E402
 from telecom_rag.rag import get_llm  # noqa: E402
+from telecom_rag.request_context import (  # noqa: E402
+    conversation_question,
+    sanitize_observation,
+)
 from telecom_rag.supabase_backend import (  # noqa: E402
     get_supabase_status,
     load_kpis_from_supabase,
@@ -35,25 +39,6 @@ from telecom_rag.supabase_backend import (  # noqa: E402
     supabase_runtime_configured,
 )
 
-NUMERIC_OBSERVATION_FIELDS = {
-    "lte_rsrp_dbm",
-    "nr_rsrp_dbm",
-    "lte_sinr_db",
-    "nr_sinr_db",
-    "nr_cqi",
-    "nr_mcs",
-    "nr_ri",
-    "throughput_mbps",
-    "anomaly_score",
-}
-TEXT_OBSERVATION_FIELDS = {
-    "observation_id",
-    "observation_source",
-    "timestamp",
-    "orientation",
-    "lte_cell_id",
-    "nr_cell_id",
-}
 PUBLIC_KPI_COLUMNS = [
     "observation_id",
     "timestamp",
@@ -302,8 +287,11 @@ async def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
     runtime = await asyncio.to_thread(get_runtime)
 
     question = payload.question.strip()
-    graph_question = _conversation_question(question, payload.history)
-    observation = _sanitize_observation(payload.observation)
+    graph_question = conversation_question(
+        question,
+        [message.model_dump() for message in payload.history],
+    )
+    observation = sanitize_observation(payload.observation)
 
     try:
         result = await asyncio.to_thread(
