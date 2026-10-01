@@ -153,59 +153,6 @@ def _clean_scalar(value: Any) -> Any:
     return value
 
 
-def _sanitize_observation(observation: dict[str, Any] | None) -> dict[str, Any] | None:
-    if not observation:
-        return None
-
-    cleaned: dict[str, Any] = {}
-    for key in NUMERIC_OBSERVATION_FIELDS:
-        value = observation.get(key)
-        if value is None or value == "":
-            continue
-        try:
-            cleaned[key] = float(value)
-        except (TypeError, ValueError):
-            continue
-
-    for key in TEXT_OBSERVATION_FIELDS:
-        value = observation.get(key)
-        if value is None:
-            continue
-        text = str(value).strip()
-        if text:
-            cleaned[key] = text[:120]
-
-    if "anomaly_flag" in observation:
-        cleaned["anomaly_flag"] = bool(observation["anomaly_flag"])
-
-    if not cleaned:
-        return None
-    cleaned.setdefault("observation_source", "user-entered")
-    cleaned.setdefault("observation_id", "custom")
-    return cleaned
-
-
-def _conversation_question(
-    question: str,
-    history: list[HistoryMessage],
-    max_messages: int = 8,
-    max_chars: int = 600,
-) -> str:
-    lines = []
-    for message in history[-max_messages:]:
-        role = "User" if message.role == "user" else "Assistant"
-        content = message.content.strip()
-        if content:
-            lines.append(f"{role}: {content[:max_chars]}")
-    if not lines:
-        return question
-    return (
-        "Recent conversation for follow-up context:\n"
-        + "\n".join(lines)
-        + f"\n\nCurrent question:\n{question}"
-    )
-
-
 @lru_cache(maxsize=1)
 def get_runtime() -> Runtime:
     if not supabase_runtime_configured():
