@@ -230,7 +230,7 @@ latency. Generation evaluation compares the same generator with and without retr
 tracks answer-term recall, citation validity and grounding proxies. Routing has its own
 labeled benchmark.
 
-Current recorded results and their limitations are in [RESULTS.md](RESULTS.md).
+Current recorded results and their limitations are in [docs/RESULTS.md](docs/RESULTS.md).
 
 Run the local evaluation notebook:
 
