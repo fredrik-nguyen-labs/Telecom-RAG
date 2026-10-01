@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: telecom-rag-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: USE_SUPABASE
+        value: "true"
+      - key: USE_CLOUDFLARE_RETRIEVAL
+        value: "true"
+      - key: API_RATE_LIMIT_PER_HOUR
+        value: "30"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
