@@ -16,7 +16,7 @@ jobs:
           python-version: "3.12"
 
       - name: Compile Python sources
-        run: python -m compileall -q app.py deploy scripts src
+        run: python -m compileall -q app.py backend deploy scripts src
 
       - name: Validate notebook and evaluation JSON
         run: |
@@ -96,9 +96,31 @@ jobs:
             langchain==1.4.2 \
             langgraph==1.2.11 \
             rank-bm25==0.2.2 \
-            supabase==2.31.0
+            supabase==2.31.0 \
+            fastapi==0.117.1
+
+      - name: Import FastAPI service
+        env:
+          PYTHONPATH: src
+        run: python -c "import backend.app.main"
 
       - name: Run unit tests
         env:
           PYTHONPATH: src
         run: pytest -q tests
+
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install frontend dependencies
+        run: npm install --prefix frontend
+
+      - name: Build React frontend
+        run: npm run build --prefix frontend
