@@ -1,6 +1,9 @@
 # Telecom-RAG
 
-**Live demo:** https://telecom-rag-3yyu7bhzs5ebhutyyserwy.streamlit.app/
+**Current live demo (Streamlit):** https://telecom-rag-3yyu7bhzs5ebhutyyserwy.streamlit.app/
+
+A React + FastAPI web deployment now lives alongside the Streamlit app in this
+repository. Streamlit remains the public fallback while the new deployment is validated.
 
 Telecom-RAG is a 5G network diagnostics assistant that combines structured radio KPI
 analysis with retrieval-augmented generation over telecom standards and technical
@@ -138,7 +141,10 @@ See [docs/SOURCES.md](docs/SOURCES.md) for the source inventory and provenance.
 ## Repository layout
 
 ```text
-app.py                       Streamlit UI and session conversation
+app.py                       current Streamlit UI and session conversation
+frontend/                     React + Vite web frontend
+backend/                      FastAPI service reusing the same RAG core
+render.yaml                   Render blueprint for the FastAPI service
 src/telecom_rag/
   graph.py                   LangGraph routing/retrieval/generation workflow
   kpi.py                     deterministic KPI analysis
@@ -188,11 +194,22 @@ Environment options are documented in [.env.example](.env.example).
 
 ## Hosted deployment
 
-The public deployment uses:
+The current public fallback uses Streamlit Community Cloud. The new web path separates
+presentation from inference:
 
-- Streamlit Community Cloud
-- Supabase Postgres + pgvector
-- Cloudflare Workers AI
+```text
+React/Vite frontend
+        |
+     FastAPI
+        |
+  existing LangGraph core
+        |
+Supabase + Cloudflare Workers AI
+```
+
+The React frontend is static and can be hosted on Cloudflare Pages. The FastAPI service is
+configured for Render through `render.yaml`. Both paths reuse the same Supabase data and
+Cloudflare model stack; the Streamlit deployment remains available during migration.
 
 Setup guides:
 
@@ -233,7 +250,9 @@ Generated evaluation artifacts under `eval/results/` are intentionally not commi
 
 Every push/PR runs:
 
-- Python compilation
+- Python compilation, including the FastAPI service
+- FastAPI import validation
+- React/TypeScript production build
 - notebook/JSON validation
 - unit tests
 - checks preventing local secrets and generated evaluation artifacts from being committed
