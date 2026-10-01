@@ -22,6 +22,7 @@ from telecom_rag.config import (
 )
 from telecom_rag.graph import build_graph
 from telecom_rag.rag import get_llm
+from telecom_rag.request_context import conversation_question, sanitize_observation
 from telecom_rag.supabase_backend import (
     get_supabase_status,
     load_kpis_from_supabase,
@@ -154,17 +155,6 @@ def _queue_chat_message() -> None:
         st.session_state.chat_draft = ""
 
 
-def _conversation_context(max_messages: int = 8, max_chars_per_message: int = 600) -> str:
-    """Return a small recent-history window for follow-up questions."""
-    lines: list[str] = []
-    for message in st.session_state.chat_messages[-max_messages:]:
-        role = "User" if message.get("role") == "user" else "Assistant"
-        content = str(message.get("content", "")).strip()
-        if content:
-            lines.append(f"{role}: {content[:max_chars_per_message]}")
-    return "\n".join(lines)
-
-
 st.title("📡 5G Network Diagnostics RAG Assistant")
 st.caption(
     "Grounded 5G diagnostics using real Ericsson/AERPAW measurements and "
@@ -258,30 +248,6 @@ cloudflare_available = bool(
 remaining_units = max(
     0, MAX_REQUEST_UNITS_PER_SESSION - st.session_state.request_units_used
 )
-
-
-def _optional_float(value: str) -> float | None:
-    value = value.strip()
-    if not value:
-        return None
-    try:
-        return float(value)
-    except ValueError:
-        return None
-
-
-def _custom_observation_from_inputs(values: dict[str, str]) -> dict | None:
-    observation: dict[str, object] = {
-        "observation_id": "custom",
-        "observation_source": "user-entered",
-    }
-    entered = False
-    for key, raw in values.items():
-        parsed = _optional_float(raw)
-        if parsed is not None:
-            observation[key] = parsed
-            entered = True
-    return observation if entered else None
 
 
 def _citation_claims(answer: str) -> tuple[list[str], dict[str, list[str]]]:
@@ -520,7 +486,7 @@ with left:
             "nr_mcs": nr_mcs,
             "throughput_mbps": throughput,
         }
-        observation = _custom_observation_from_inputs(custom_values)
+        observation = sanitize_observation(custom_values)
 
         if observation:
             preview_rows = [
@@ -613,14 +579,10 @@ if run:
             retrieval_mode=retrieval_mode,
         )
 
-        conversation_context = _conversation_context()
-        graph_question = cleaned_question
-        if conversation_context:
-            graph_question = (
-                "Recent conversation for follow-up context:\n"
-                f"{conversation_context}\n\n"
-                f"Current question:\n{cleaned_question}"
-            )
+        graph_question = conversation_question(
+            cleaned_question,
+            st.session_state.chat_messages,
+        )
 
         with workflow_status.container():
             with st.status(
