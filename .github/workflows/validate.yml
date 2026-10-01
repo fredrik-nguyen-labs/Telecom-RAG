@@ -102,10 +102,22 @@ jobs:
               if any(part in forbidden_parts for part in path.parts):
                   tracked_forbidden.append(str(path))
                   continue
-              if path.parts[:2] in {
+              generated_roots = (
                   ("frontend", "dist"),
                   ("vector_store",),
-              }:
+                  ("data", "downloads"),
+                  ("data", "raw"),
+                  ("data", "processed"),
+                  ("docs", "corpus"),
+                  ("eval", "results"),
+              )
+              if (
+                  path.name != ".gitkeep"
+                  and any(
+                      path.parts[: len(root)] == root
+                      for root in generated_roots
+                  )
+              ):
                   tracked_forbidden.append(str(path))
 
           assert not tracked_forbidden, (
