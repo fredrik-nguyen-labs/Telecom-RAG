@@ -26,3 +26,27 @@ services:
         sync: false
       - key: CORS_ORIGINS
         value: https://telecom.fnsystems.dev
+
+  - type: web
+    name: telecom-rag-web
+    runtime: static
+    buildCommand: npm install --prefix frontend && npm run build --prefix frontend
+    staticPublishPath: frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=()
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+
