@@ -201,7 +201,6 @@ hosted_lightweight = os.getenv("HOSTED_LIGHTWEIGHT", "").lower() in {
 }
 
 if using_supabase:
-    bootstrap = None
     kpis = cached_kpis("supabase")
 elif hosted_lightweight:
     st.error(
@@ -316,9 +315,6 @@ def _render_cited_evidence(answer: str, sources: list[dict]) -> None:
         location = " · ".join(location_bits)
 
         title = source.get("title") or source.get("source") or "Unknown source"
-        label = f"[{citation_id}] {title}"
-        if location:
-            label += f" — {location}"
 
         with st.container(border=True):
             cited_claims = claims.get(citation_id, [])
@@ -349,10 +345,6 @@ elif hosted_lightweight:
 else:
     provider = "ollama"
     model = os.getenv("OLLAMA_MODEL", OLLAMA_MODEL)
-
-retrieval_mode = "reranked"
-top_k = TOP_K
-
 
 observation = None
 
@@ -575,8 +567,8 @@ if run:
             retriever,
             router_llm=router_llm,
             reference_df=kpis,
-            top_k=top_k,
-            retrieval_mode=retrieval_mode,
+            top_k=TOP_K,
+            retrieval_mode="reranked",
         )
 
         graph_question = conversation_question(
