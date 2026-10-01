@@ -5,7 +5,11 @@ import type {
   Observation,
 } from "./types";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(
+const DEFAULT_API_BASE = import.meta.env.DEV
+  ? "http://localhost:8000"
+  : "https://api.telecom.fnsystems.dev";
+
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE).replace(
   /\/$/,
   "",
 );
