@@ -1,12 +1,24 @@
 # Architecture
 
-This document describes the current production and local execution paths for Telecom-RAG.
+This document describes the production, staged web and local execution paths for Telecom-RAG.
+
+## Presentation and API layers
+
+The existing Streamlit UI remains live while the new web stack is validated. The new React
+frontend calls a thin FastAPI layer, and FastAPI imports the same `src/telecom_rag` core
+used by Streamlit. There is only one routing/retrieval/generation implementation.
+
+```text
+Streamlit ------------------\
+                             > shared telecom_rag core -> Supabase / Cloudflare
+React -> FastAPI -----------/
+```
 
 ## Request lifecycle
 
-The Streamlit app accepts an optional KPI observation plus a natural-language question.
-Recent conversation context is added only for follow-up interpretation; chat history is not
-stored in Supabase.
+Both UIs accept an optional KPI observation plus a natural-language question. Recent
+conversation context is added only for follow-up interpretation; chat history is not stored
+in Supabase.
 
 ```text
 question + optional recent chat
@@ -105,21 +117,19 @@ reasoning.
 
 ## Conversation state
 
-`st.session_state.chat_messages` stores the current browser-session thread. Up to the
-latest eight messages are converted into follow-up context.
+Streamlit stores the current thread in `st.session_state.chat_messages`. The React
+frontend stores it in browser memory and sends only a bounded recent window to FastAPI.
+FastAPI again limits follow-up context to the latest eight messages.
 
-`New chat` clears the thread, pending request state, suggested-question selection and
-message draft. The starter question is restored. Conversations are never written to
-Supabase, so a new Streamlit/browser session starts without previous chat memory.
-
-KPI widgets are separate state, so clearing the conversation does not intentionally reset
-the selected or entered measurement.
+`New chat` clears the thread but does not intentionally reset the selected KPI context.
+Conversations are never written to Supabase, so a new browser session starts without
+previous chat memory.
 
 ## Hosted vs local components
 
 | Component | Hosted | Local |
 | --- | --- | --- |
-| UI | Streamlit | Streamlit |
+| UI | Streamlit fallback + React web frontend | Streamlit or React dev server |
 | Router | Cloudflare GLM | selected local model |
 | Generator | Cloudflare Gemma | Ollama |
 | Embeddings | Cloudflare BGE | local BGE |
