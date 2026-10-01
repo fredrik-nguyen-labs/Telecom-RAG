@@ -1,4 +1,4 @@
-# Downloaded / generated KPI data
+# Downloaded / generated project data
 data/downloads/
 data/raw/*
 data/processed/*
@@ -13,35 +13,73 @@ docs/corpus/*
 eval/results/*
 !eval/results/.gitkeep
 
-# Generated vector indexes
+# Generated retrieval indexes / model artifacts
 vector_store/
 *.faiss
 *.pkl
 
-# Python
+# Python build / caches / environments
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
+.eggs/
+build/
+dist/
 .venv/
 venv/
+env/
+ENV/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.pyright/
+.pytype/
+.pyre/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
-# Secrets / local config
+# Local secrets / environment overrides
 .env
 .env.*
 !.env.example
+!**/.env.example
+*.local
 .streamlit/secrets.toml
+
+# Node / frontend build artifacts
+**/node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # Jupyter
 .ipynb_checkpoints/
 
-# Logs / OS / editor
+# Temporary / scratch files
+.cache/
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+*~
+
+# Logs
 *.log
-.DS_Store
+
+# IDE / editor
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# Frontend build
-frontend/node_modules/
-frontend/dist/
+# OS metadata
+.DS_Store
+Thumbs.db
