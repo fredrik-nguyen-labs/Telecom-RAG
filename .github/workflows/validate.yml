@@ -22,6 +22,7 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import subprocess
           from pathlib import Path
 
           for path in sorted(Path("notebooks").glob("*.ipynb")):
@@ -62,14 +63,51 @@ jobs:
               + ", ".join(str(path) for path in generated_results)
           )
 
-          forbidden = [
-              Path(".env"),
-              Path(".streamlit/secrets.toml"),
+          tracked = [
+              Path(path)
+              for path in subprocess.check_output(
+                  ["git", "ls-files"], text=True
+              ).splitlines()
+          ]
+          exact_forbidden = {
               Path("requirements.txt"),
               Path("requirements-dev.txt"),
               Path("RUNNING.md"),
-          ]
-          tracked_forbidden = [str(path) for path in forbidden if path.exists()]
+          }
+          forbidden_parts = {
+              "node_modules",
+              "__pycache__",
+              ".pytest_cache",
+              ".ruff_cache",
+              ".mypy_cache",
+          }
+          bad_suffixes = {".pem", ".key"}
+          tracked_forbidden = []
+          for path in tracked:
+              name = path.name
+              if path in exact_forbidden:
+                  tracked_forbidden.append(str(path))
+                  continue
+              if name == ".env" or (
+                  name.startswith(".env.") and name != ".env.example"
+              ):
+                  tracked_forbidden.append(str(path))
+                  continue
+              if name == "secrets.toml":
+                  tracked_forbidden.append(str(path))
+                  continue
+              if path.suffix.lower() in bad_suffixes:
+                  tracked_forbidden.append(str(path))
+                  continue
+              if any(part in forbidden_parts for part in path.parts):
+                  tracked_forbidden.append(str(path))
+                  continue
+              if path.parts[:2] in {
+                  ("frontend", "dist"),
+                  ("vector_store",),
+              }:
+                  tracked_forbidden.append(str(path))
+
           assert not tracked_forbidden, (
               "Unexpected public-repo artifacts: " + ", ".join(tracked_forbidden)
           )
