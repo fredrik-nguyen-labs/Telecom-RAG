@@ -58,6 +58,16 @@ No Streamlit files need to be removed to deploy the new site.
 
 The API is in `backend/app/main.py`. The Render blueprint is `render.yaml`.
 
+Production hostname:
+
+```text
+https://api.telecom.fnsystems.dev
+```
+
+The Blueprint pins the service to Frankfurt, uses the Free compute plan, sets the health
+check to `/api/health`, and allows browser requests only from
+`https://telecom.fnsystems.dev`.
+
 Endpoints:
 
 - `GET /api/health` — verifies Supabase/model runtime configuration;
@@ -69,16 +79,22 @@ messages. It does not persist chat history.
 
 ### Required backend environment variables
 
+The Blueprint already defines the non-secret production settings. During initial Render
+creation, provide only these four values:
+
 ```text
-USE_SUPABASE=true
-USE_CLOUDFLARE_RETRIEVAL=true
 SUPABASE_URL=...
 SUPABASE_PUBLISHABLE_KEY=...
 CLOUDFLARE_ACCOUNT_ID=...
 CLOUDFLARE_API_TOKEN=...
-CORS_ORIGINS=https://YOUR_FRONTEND_HOST
-API_RATE_LIMIT_PER_HOUR=30
 ```
+
+`SUPABASE_PUBLISHABLE_KEY` is the low-privilege public/runtime key protected by RLS.
+Never use `SUPABASE_SECRET_KEY` in the web service.
+
+Create the Cloudflare credential from **Workers AI -> Use REST API -> Create a Workers AI
+API Token** and copy the Account ID from the same page. The token is used only for model
+inference; it does not need DNS or zone-management permissions.
 
 Optional model overrides use the same variables as Streamlit:
 
@@ -107,21 +123,28 @@ npm install
 npm run dev
 ```
 
-Set:
+Local development defaults to `http://localhost:8000`. You can override it with:
 
 ```text
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-For a static production deployment:
+Production builds default to `https://api.telecom.fnsystems.dev`, so Cloudflare Pages
+does not require an API-base environment variable.
+
+For Cloudflare Pages:
 
 ```text
-Root directory: frontend
-Build command:  npm install && npm run build
-Output:         dist
+Repository:       fredrik-nguyen-labs/Telecom-RAG
+Production branch: main
+Root directory:   frontend
+Build command:    npm run build
+Build output:     dist
+Custom domain:    telecom.fnsystems.dev
 ```
 
-Set `VITE_API_BASE_URL` to the deployed FastAPI origin before building.
+`frontend/public/_headers` supplies basic browser security headers and
+`frontend/public/_redirects` keeps the React SPA fallback working.
 
 The frontend contains no Cloudflare or Supabase secret credentials. It only talks to the
 FastAPI API.
@@ -149,12 +172,20 @@ default backend CORS configuration.
 Use this order so no public demo is interrupted:
 
 1. keep Streamlit live;
-2. deploy FastAPI to Render and verify `/api/health`;
-3. deploy the React frontend using the Render API URL;
-4. set `CORS_ORIGINS` on Render to the exact frontend origin;
-5. test docs-only, KPI-aware, follow-up and citation flows;
-6. attach a custom domain only after those checks pass;
-7. keep the Streamlit URL as a fallback until the new site has been stable.
+2. create the Workers AI REST token and copy the Cloudflare Account ID;
+3. deploy the Render Blueprint and provide the four required runtime values;
+4. verify the Render `/api/health` endpoint;
+5. add `api.telecom.fnsystems.dev` as a Render custom domain;
+6. in Cloudflare DNS, create a DNS-only CNAME for `api.telecom` pointing to the
+   Render `.onrender.com` hostname, then verify the custom domain in Render;
+7. create the Cloudflare Pages project from the same GitHub repository using
+   `frontend` as the root directory and attach `telecom.fnsystems.dev`;
+8. test docs-only, KPI-aware, follow-up and citation flows;
+9. keep the Streamlit URL as a fallback until the new site has been stable.
+
+Render Free web services can spin down after inactivity, so the first request after an
+idle period can have a noticeable cold start. That is acceptable for this portfolio demo
+but should be upgraded if the project becomes a production service.
 
 ## Verification
 
