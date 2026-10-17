@@ -52,3 +52,27 @@ def test_health_does_not_expose_internal_errors(monkeypatch) -> None:
     assert response.status_code == 503
     assert "private" not in response.text
     assert "token" not in response.text
+
+
+def test_early_rejection_exposes_error_only_to_allowed_origins() -> None:
+    response = client.post(
+        "/api/chat",
+        content="invalid",
+        headers={
+            "Content-Type": "text/plain",
+            "Origin": "https://telecom.fnsystems.dev",
+        },
+    )
+    assert response.status_code == 415
+    assert response.headers["access-control-allow-origin"] == "https://telecom.fnsystems.dev"
+    assert response.headers["cache-control"] == "no-store"
+
+    rejected = client.post(
+        "/api/chat",
+        content="invalid",
+        headers={
+            "Content-Type": "text/plain",
+            "Origin": "https://untrusted.example",
+        },
+    )
+    assert "access-control-allow-origin" not in rejected.headers
