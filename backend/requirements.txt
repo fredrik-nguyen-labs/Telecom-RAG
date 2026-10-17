@@ -5,4 +5,4 @@ pandas==3.0.6
 requests==2.34.2
 langchain==1.4.2
 langgraph==1.2.11
-supabase==2.31.0
+supabase==2.32.0

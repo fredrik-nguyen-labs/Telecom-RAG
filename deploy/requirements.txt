@@ -6,4 +6,4 @@ requests==2.34.2
 langchain==1.4.2
 langgraph==1.2.11
 streamlit==1.64.0
-supabase==2.31.0
+supabase==2.32.0
