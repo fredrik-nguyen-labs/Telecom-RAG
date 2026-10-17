@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getHealth, getObservations, sendChat } from "./api";
 import { AnswerBody, SourceList } from "./components/Answer";
 import { ObservationSummary } from "./components/ObservationSummary";
+import { SiteSections } from "./components/SiteSections";
 import {
   DEFAULT_KPIS,
   DEFAULT_QUESTION,
@@ -27,6 +28,7 @@ function App() {
     history: ChatMessage[];
   } | null>(null);
   const conversationEnd = useRef<HTMLDivElement>(null);
+  const questionInput = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     getHealth()
@@ -118,6 +120,12 @@ function App() {
     await runQuestion(cleaned, activeObservation, messages, true);
   }
 
+  function selectExample(example: string) {
+    setQuestion(example);
+    questionInput.current?.focus();
+    questionInput.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
   function retryFailedQuestion() {
     if (!failedRequest || loading) return;
     void runQuestion(
@@ -130,6 +138,7 @@ function App() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#workspace">Skip to demo</a>
       <header className="topbar">
         <a className="brand" href="/">
           <span className="brand-mark">FN</span>
@@ -138,15 +147,11 @@ function App() {
             <small>5G network diagnostics</small>
           </span>
         </a>
-        <nav>
-          <a
-            href="https://github.com/fredrik-nguyen-labs/Telecom-RAG"
-            rel="noreferrer"
-            target="_blank"
-          >
-            GitHub
-          </a>
-          <a href="#about">About</a>
+        <nav aria-label="Main navigation">
+          <a href="#workspace">Demo</a>
+          <a href="#methodology">Method</a>
+          <a href="/privacy.html">Privacy</a>
+          <a href="https://github.com/fredrik-nguyen-labs/Telecom-RAG" rel="noopener noreferrer" target="_blank">GitHub ↗</a>
         </nav>
       </header>
 
@@ -159,7 +164,11 @@ function App() {
             against the dataset, and ask telecom questions grounded in standards and
             engineering documentation.
           </p>
-          <div className="hero-meta">
+          <div className="hero-actions">
+            <a className="hero-primary" href="#workspace">Open the demo <span aria-hidden="true">↗</span></a>
+            <a className="hero-secondary" href="#data">Explore the reference data ↓</a>
+          </div>
+          <div className="hero-meta" role="status" aria-live="polite">
             <span className={health ? "status-dot online" : "status-dot"} />
             {health ? (
               <span>
@@ -174,7 +183,7 @@ function App() {
           </div>
         </section>
 
-        <section className="workspace">
+        <section className="workspace" id="workspace" aria-label="Telecom RAG conversation">
           <div className="section-heading">
             <div>
               <span className="section-index">01</span>
@@ -183,6 +192,7 @@ function App() {
             {messages.length > 0 && (
               <button
                 className="ghost-button"
+                disabled={loading}
                 onClick={() => {
                   setMessages([]);
                   setError("");
@@ -211,11 +221,12 @@ function App() {
                 <div className="message-label">
                   {message.role === "user" ? "You" : "Telecom RAG"}
                 </div>
-                <AnswerBody text={message.content} />
+                <AnswerBody text={message.content} scope={`message-${index}`} />
                 {message.role === "assistant" && (
                   <SourceList
                     answer={message.content}
                     sources={message.sources ?? []}
+                    scope={`message-${index}`}
                   />
                 )}
               </div>
@@ -355,7 +366,10 @@ function App() {
             </label>
 
             <form onSubmit={submit}>
+              <label className="textarea-label" htmlFor="question-input">Your question</label>
               <textarea
+                id="question-input"
+                ref={questionInput}
                 maxLength={700}
                 placeholder="Ask about the selected measurement or a general telecom topic…"
                 value={question}
@@ -373,11 +387,12 @@ function App() {
               </div>
             </form>
 
+            <p className="privacy-hint">Questions and selected KPIs are sent to the hosted AI service for processing. Avoid sensitive data. <a href="/privacy.html">Privacy notice ↗</a></p>
             <ObservationSummary observation={activeObservation} />
           </article>
         </section>
 
-        <section className="about" id="about">
+        <section className="about" id="methodology">
           <div>
             <span className="section-index">04</span>
             <h2>How the answer is produced</h2>
@@ -401,6 +416,7 @@ function App() {
             </div>
           </div>
         </section>
+        <SiteSections onExample={selectExample} />
       </main>
 
       <footer>
@@ -408,9 +424,15 @@ function App() {
           <strong>Telecom RAG</strong>
           <span>Research and engineering demo by Fredrik Nguyen.</span>
         </div>
-        <span>
-          React · FastAPI · LangGraph · Supabase · Cloudflare Workers AI
-        </span>
+        <div className="footer-meta">
+          <span>React · FastAPI · LangGraph · Supabase · Workers AI</span>
+          <nav aria-label="Legal and resources">
+            <a href="/privacy.html">Privacy</a>
+            <a href="/terms.html">Terms</a>
+            <a href="#data">Data &amp; sources</a>
+            <a href="https://github.com/fredrik-nguyen-labs/Telecom-RAG" rel="noopener noreferrer" target="_blank">Source code ↗</a>
+          </nav>
+        </div>
       </footer>
     </div>
   );
