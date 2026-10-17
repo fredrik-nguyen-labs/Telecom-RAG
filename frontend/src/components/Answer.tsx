@@ -2,10 +2,16 @@ import type { Source } from "../types";
 
 function sourceLink(source: Source): string | undefined {
   if (!source.url) return undefined;
-  if (source.page && source.url.toLowerCase().endsWith(".pdf")) {
-    return `${source.url}#page=${source.page}`;
+  try {
+    const link = new URL(source.url);
+    if (!["http:", "https:"].includes(link.protocol)) return undefined;
+    if (source.page && link.pathname.toLowerCase().endsWith(".pdf")) {
+      link.hash = `page=${source.page}`;
+    }
+    return link.href;
+  } catch {
+    return undefined;
   }
-  return source.url;
 }
 
 function citationClaims(answer: string): Map<string, string[]> {
@@ -31,7 +37,7 @@ function citationClaims(answer: string): Map<string, string[]> {
   return claims;
 }
 
-function InlineAnswer({ text }: { text: string }) {
+function InlineAnswer({ text, scope = "answer" }: { text: string; scope?: string }) {
   const parts = text.split(/(\[S\d+\])/g);
   return (
     <>
@@ -39,7 +45,7 @@ function InlineAnswer({ text }: { text: string }) {
         const match = part.match(/^\[S(\d+)\]$/);
         if (!match) return <span key={index}>{part}</span>;
         return (
-          <a className="citation" href={`#source-S${match[1]}`} key={index}>
+          <a className="citation" href={`#source-${scope}-S${match[1]}`} key={index}>
             {part}
           </a>
         );
@@ -48,7 +54,7 @@ function InlineAnswer({ text }: { text: string }) {
   );
 }
 
-export function AnswerBody({ text }: { text: string }) {
+export function AnswerBody({ text, scope }: { text: string; scope?: string }) {
   const groups = text.split(/\n{2,}/).filter((group) => group.trim());
 
   return (
@@ -65,7 +71,7 @@ export function AnswerBody({ text }: { text: string }) {
             <ul key={index}>
               {lines.map((line, lineIndex) => (
                 <li key={lineIndex}>
-                  <InlineAnswer text={line.slice(2)} />
+                  <InlineAnswer text={line.slice(2)} scope={scope} />
                 </li>
               ))}
             </ul>
@@ -77,7 +83,7 @@ export function AnswerBody({ text }: { text: string }) {
             {lines.map((line, lineIndex) => (
               <span key={lineIndex}>
                 {lineIndex > 0 && <br />}
-                <InlineAnswer text={line} />
+                <InlineAnswer text={line} scope={scope} />
               </span>
             ))}
           </p>
@@ -90,9 +96,11 @@ export function AnswerBody({ text }: { text: string }) {
 export function SourceList({
   answer,
   sources,
+  scope = "answer",
 }: {
   answer: string;
   sources: Source[];
+  scope?: string;
 }) {
   if (!sources.length) return null;
   const claims = citationClaims(answer);
@@ -113,7 +121,7 @@ export function SourceList({
         const supportedClaims = claims.get(citation) ?? [];
 
         return (
-          <article className="source-card" id={`source-${citation}`} key={citation}>
+          <article className="source-card" id={`source-${scope}-${citation}`} key={citation}>
             <div className="source-reference">
               <span className="reference-chip">[{citation}]</span>
               {location && <span>{location}</span>}
@@ -134,7 +142,7 @@ export function SourceList({
             <p className="source-row">
               <strong>Source:</strong>{" "}
               {url ? (
-                <a href={url} rel="noreferrer" target="_blank">
+                <a href={url} rel="noopener noreferrer" target="_blank">
                   {title}
                 </a>
               ) : (
@@ -144,7 +152,7 @@ export function SourceList({
 
             {url && (
               <p className="source-row source-url">
-                <a href={url} rel="noreferrer" target="_blank">
+                <a href={url} rel="noopener noreferrer" target="_blank">
                   {url}
                 </a>
               </p>
