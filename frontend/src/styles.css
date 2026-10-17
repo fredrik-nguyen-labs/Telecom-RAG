@@ -437,6 +437,28 @@ main {
   font-size: 14px;
 }
 
+.error-banner button {
+  display: inline-block;
+  margin-left: 12px;
+  padding: 6px 12px;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.error-banner button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.error-banner button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .control-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
