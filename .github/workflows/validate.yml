@@ -157,7 +157,7 @@ jobs:
       - name: Run unit tests
         env:
           PYTHONPATH: src
-        run: pytest -q tests
+        run: python -m pytest -q tests
 
 
   frontend-build:
