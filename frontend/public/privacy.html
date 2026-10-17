@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="robots" content="index,follow"/><meta name="theme-color" content="#07111f"/>
+<meta name="description" content="How Telecom RAG processes questions, measurement data and technical metadata."/>
+<link rel="canonical" href="https://telecom.fnsystems.dev/privacy.html"/>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"/><link rel="stylesheet" href="/site-pages.css"/>
+<title>Privacy notice · Telecom RAG</title>
+</head>
+<body><div class="site-shell">
+<header class="site-header"><strong>FN / Telecom RAG</strong><nav><a href="/">Back to app</a><a href="/terms.html">Terms</a><a href="https://github.com/fredrik-nguyen-labs/Telecom-RAG">GitHub</a></nav></header>
+<main>
+<div class="eyebrow">Transparency</div><h1>Privacy notice</h1>
+<p class="intro">This is a public telecom research demonstration. This page describes what the application does with data when you use it. Last updated: 17 October 2026.</p>
+<div class="notice"><strong>Please don't enter personal, confidential or proprietary network information.</strong><p>The demo is public, and questions are processed by third-party hosting and AI providers.</p></div>
+<h2>What you submit</h2>
+<p>When you send a question, your question, the selected measurement values (if any), and a bounded recent conversation history are transmitted over HTTPS to the Telecom RAG API on Render. The API may send relevant text, retrieval queries and technical context to Cloudflare Workers AI to generate an answer. Retrieved reference documents and public measurement data are held in Supabase.</p>
+<h2>What the application stores</h2>
+<p>Chat messages are held in your open page's memory for follow-up questions. The application does not deliberately save your conversations to its Supabase database, put them in persistent browser storage, or create user accounts. Refreshing or closing the page clears that in-memory conversation. Reference documents and public KPI observations are persistently stored as part of the demo's dataset.</p>
+<h2>Hosting logs and third parties</h2>
+<p>Render and other network infrastructure may process standard technical logs, such as IP addresses, request paths, response status and timestamps, for service delivery, reliability and security. Cloudflare Workers AI processes model inputs needed to answer your questions. Supabase processes reference-data retrieval. Each provider has its own processing and retention practices; this site cannot promise that all third-party logs are immediately deleted.</p>
+<h2>Cookies, analytics and advertising</h2>
+<p>The application does not implement advertising, a tracking pixel, or its own analytics cookies. Infrastructure providers may still use strictly operational data or cookies according to their own policies. Following links to external references takes you to independent websites with their own practices.</p>
+<h2>Security</h2>
+<p>The site uses HTTPS, limited browser-to-API origins, restricted runtime credentials and bounded requests. No internet service can guarantee absolute security. Do not submit sensitive information to this research demo.</p>
+<h2>Questions or privacy requests</h2>
+<p>For questions about the application or requests concerning information sent to it, contact the maintainer using an appropriate private contact method listed on the <a href="https://github.com/fredrik-nguyen">GitHub profile</a>. Do not place personal data or credentials in public issues. Where a request concerns a third-party provider's records, its own privacy policy may also apply.</p>
+<p>Also see the <a href="/terms.html">usage terms and limitations</a>.</p>
+</main><footer>© 2026 Telecom RAG · Independent engineering demo · <a href="/">Return to application</a></footer>
+</div></body></html>
