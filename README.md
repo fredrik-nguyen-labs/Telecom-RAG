@@ -1,278 +1,131 @@
-# Telecom-RAG
+# Telecom RAG
 
-**Web app:** https://telecom.fnsystems.dev  
-**Streamlit fallback:** https://telecom-rag-3yyu7bhzs5ebhutyyserwy.streamlit.app/
+**A 5G network diagnostics assistant grounded in real measurements and telecom documentation.**
 
-The production web stack uses a React/Vite frontend with a FastAPI API. The original
-Streamlit app remains available as a fallback while the new deployment is validated.
+[**Live web app ↗**](https://telecom.fnsystems.dev) · [Streamlit fallback](https://telecom-rag-3yyu7bhzs5ebhutyyserwy.streamlit.app/) · [Evaluation](docs/RESULTS.md) · [Sources](docs/SOURCES.md)
 
-Telecom-RAG is a 5G network diagnostics assistant that combines structured radio KPI
-analysis with retrieval-augmented generation over telecom standards and technical
-documentation. It supports both measurement-aware troubleshooting and general telecom
-questions in one conversational interface.
+Telecom RAG combines network KPI interpretation with retrieval-augmented generation. Ask
+about a real Ericsson/AERPAW 5G measurement, enter your own radio KPIs, or explore a
+general telecom concept. Answers include inspectable technical source references.
 
-## What the app does
+## What it does
 
-- Accepts either a real Ericsson/AERPAW observation or editable example KPI values.
-- Routes each question to either documentation-only reasoning or KPI + documentation.
-- Computes deterministic dataset-relative KPI context before generation when measurements
-  are relevant.
-- Retrieves supporting telecom evidence and generates a concise answer with inline
-  citations such as `[S1]`.
-- Keeps a bounded session conversation so follow-up questions can refer to earlier turns.
-- Shows the exact retrieved source chunks behind cited claims.
+- **Measurement-aware answers:** analyze NR/LTE signal strength, SINR, CQI, MCS,
+  throughput and other available radio measurements.
+- **Semantic routing:** distinguish general documentation questions from questions
+  that benefit from KPI analysis.
+- **Grounded retrieval:** hybrid semantic + full-text search over standards and
+  technical documents, followed by reranking.
+- **Transparent evidence:** inline citations, links to original sources, and
+  expandable retrieved passages.
+- **Conversational context:** bounded follow-up context within the active browser
+  session; chat content is not persisted in the app database.
 
-The public UI intentionally keeps the answer simple: one concise response followed by the
-cited sources. Detailed statistics are used as model context when relevant rather than
-rendered as a separate diagnostics dashboard.
+## Technology
 
-## Architecture
-
-```text
-User question + optional KPI observation
-                 |
-          semantic router
-          /             \
-     docs-only        KPI + docs
-                         |
-                 deterministic KPI analysis
-          \             /
-           retrieval query
-                 |
-     Supabase hybrid retrieval
-   pgvector + PostgreSQL FTS
-                 |
-                RRF
-                 |
-       Cloudflare BGE reranker
-                 |
-     retrieved technical context
-                 |
-       Gemma grounded answer
-                 |
-       answer + cited sources
-```
-
-Hosted model roles:
-
-- router: `@cf/zai-org/glm-4.7-flash`
-- generator: `@cf/google/gemma-4-26b-a4b-it`
-- query embeddings: `@cf/baai/bge-small-en-v1.5`
-- reranker: `@cf/baai/bge-reranker-base`
-
-The generator and router are called through a small direct Workers AI Chat Completions
-adapter. Reasoning/thinking is disabled for the interactive hosted path so the completion
-budget is spent on visible output.
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the detailed request flow.
-
-## Conversation memory
-
-Conversation memory is deliberately session-scoped.
-
-- The React frontend keeps the current thread in browser memory; Streamlit uses
-  `session_state`.
-- Up to the latest eight messages are supplied as bounded follow-up context.
-- **New chat** clears the conversation while preserving the selected KPI context.
-- Chat history is **not persisted to Supabase** and is not remembered after the browser
-  session is lost.
-
-This keeps the demo conversational without introducing user accounts or persistent chat
-storage.
-
-## KPI context
-
-The reference data is the public **Ericsson 5G NSA network RF and throughput measurements
-on AERPAW network** dataset.
-
-- Dryad DOI: https://doi.org/10.5061/dryad.wh70rxx06
-- release: May 21, 2025
-- examples of available features: LTE/NR RSRP, LTE/NR SINR, CQI, MCS, RI, throughput,
-  orientation and cell metadata
-
-For KPI-aware questions the data layer can compute:
-
-- empirical KPI percentiles
-- Spearman/rank relationships
-- nearest-neighbor comparisons
-- expected-vs-actual throughput context
-- cross-KPI consistency
-- multivariate rarity
-- Isolation Forest anomaly scores for dataset observations
-
-These are descriptive, dataset-relative signals. They are not universal quality
-thresholds or causal proof.
-
-## Retrieval
-
-### Hosted path
+| Layer | Implementation |
+|---|---|
+| Web | React, TypeScript, Vite, Render static CDN |
+| API | Python, FastAPI, Render (Frankfurt) |
+| Orchestration | LangGraph, LangChain |
+| Search | Supabase PostgreSQL, pgvector, FTS, RRF |
+| AI | Cloudflare Workers AI (routing, generation, embeddings, reranking) |
+| Reference data | Public Ericsson/AERPAW 5G measurements; ETSI/3GPP and other technical sources |
 
 ```text
-Cloudflare BGE query embedding
-            |
-Supabase pgvector/HNSW + PostgreSQL FTS
-            |
-   reciprocal-rank fusion
-            |
- Cloudflare BGE reranking
-            |
-         top-k chunks
+Question + optional measurement
+               |
+       Semantic intent routing
+       /                    \
+   Docs only            KPI + docs
+       \                    /
+          Hybrid retrieval
+                 |
+             Reranking
+                 |
+         Cited AI answer
 ```
 
-If the optional hosted reranker is unavailable, the system falls back to the already
-fused RRF ranking instead of failing the request.
+KPI statistics are dataset-relative descriptive evidence, not universal thresholds
+or causal guarantees. The assistant is a research and portfolio demonstration, not
+an automated network-management system.
 
-### Local/evaluation path
+## Evaluation and provenance
 
-The reproducible local stack uses BGE embeddings with FAISS and a MiniLM cross-encoder.
-BM25/RRF remains available for controlled retrieval ablations in the evaluation code even
-though it is not the default local application path.
+The repo includes deterministic KPI processing, an evaluation notebook, benchmark
+question sets, and a hosted evaluation runner.
 
-## Corpus
+- [Evaluation results and caveats](docs/RESULTS.md)
+- [Data and document provenance](docs/SOURCES.md)
+- [Architecture](docs/ARCHITECTURE.md)
 
-The configured corpus covers:
+The hosted RAG path is distinct from local FAISS-based retrieval, so their evaluation
+metrics should not be conflated.
 
-- ETSI/3GPP NR and LTE standards
-- the AERPAW/Ericsson experiment
-- Ericsson technical material on radio performance, beamforming, coverage and capacity
+## Get started locally
 
-See [docs/SOURCES.md](docs/SOURCES.md) for the source inventory and provenance.
-
-## Repository layout
-
-```text
-app.py                       current Streamlit UI and session conversation
-frontend/                     React + Vite web frontend
-backend/                      FastAPI service reusing the same RAG core
-render.yaml                   Render blueprint for API + static frontend
-src/telecom_rag/
-  graph.py                   LangGraph routing/retrieval/generation workflow
-  kpi.py                     deterministic KPI analysis
-  rag.py                     model clients, prompts and answer generation
-  retrieval.py               local retrieval implementations
-  supabase_backend.py        hosted retrieval, embeddings, reranking and sync
-  data.py                    KPI processing
-  documents.py               corpus loading/chunking
-  evaluation.py              local evaluation utilities
-scripts/
-  download_data.py           fetch public KPI data
-  prepare_kpi_data.py        build processed KPI table
-  download_docs.py           fetch configured corpus
-  build_index.py             build local vector index
-  sync_supabase.py           seed hosted data
-  evaluate_hosted.py         hosted retrieval/routing/generation benchmark
-notebooks/
-  01_data_processing_and_eda.ipynb
-  02_rag_evaluation.ipynb
-supabase/migrations/         hosted database schema/RPCs
-eval/                        benchmark questions and generated-result directory
-deploy/                      lightweight Streamlit Community Cloud entrypoint
-```
-
-## Local quick start
-
-Requires Python 3.12 and `uv`.
+Requires Python 3.12, [uv](https://docs.astral.sh/uv/) and (for the React site) Node 22.
 
 ```bash
 uv sync
-
+cp .env.example .env
+# Set required provider values in .env, never in committed files.
 uv run python scripts/download_data.py
 uv run python scripts/prepare_kpi_data.py
 uv run python scripts/download_docs.py
 uv run python scripts/build_index.py
-
 uv run streamlit run app.py
 ```
 
-The local application uses Ollama by default:
+For the web stack:
 
 ```bash
-ollama pull qwen2.5:3b
+python -m pip install -r backend/requirements.txt
+uvicorn backend.app.main:app --reload --port 8000
 ```
 
-Environment options are documented in [.env.example](.env.example).
-
-## Hosted deployment
-
-The current public fallback uses Streamlit Community Cloud. The new web path separates
-presentation from inference:
-
-```text
-React/Vite frontend
-        |
-     FastAPI
-        |
-  existing LangGraph core
-        |
-Supabase + Cloudflare Workers AI
-```
-
-Both the static React frontend and FastAPI API are configured on Render through
-`render.yaml`. The API uses Supabase for hosted retrieval and Cloudflare Workers AI for
-model inference. The Streamlit deployment remains available as a fallback.
-
-Setup guides:
-
-- [Deployment](docs/DEPLOYMENT.md)
-- [Supabase](docs/SUPABASE.md)
-- [Cloudflare Workers AI](docs/CLOUDFLARE.md)
-
-The public runtime uses only the low-privilege Supabase publishable key. The secret/admin
-key is required only for trusted database synchronization and must never be exposed in
-Streamlit.
-
-## Evaluation
-
-The repository includes separate local and hosted evaluation paths.
-
-Retrieval metrics include source hit/recall/precision, MRR, evidence-term recall and
-latency. Generation evaluation compares the same generator with and without retrieval and
-tracks answer-term recall, citation validity and grounding proxies. Routing has its own
-labeled benchmark.
-
-Current recorded results and their limitations are in [docs/RESULTS.md](docs/RESULTS.md).
-
-Run the local evaluation notebook:
+In a separate terminal:
 
 ```bash
-uv run jupyter lab
+cd frontend
+npm install
+npm run dev
 ```
 
-Run the production-style hosted benchmark after configuring Supabase and Cloudflare:
+The hosted stack requires seeded Supabase data and server-side Cloudflare Workers AI
+credentials; the optional local generation path supports Ollama. Details are in
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-```bash
-uv run python scripts/evaluate_hosted.py
-```
+## Repository organization
 
-Generated evaluation artifacts under `eval/results/` are intentionally not committed.
+- `frontend/` — public React web interface and static information pages
+- `backend/` — FastAPI gateway and request safeguards
+- `src/telecom_rag/` — reusable LangGraph, KPI and retrieval core
+- `supabase/migrations/` — versioned database schema and RLS policies
+- `scripts/`, `notebooks/`, `eval/` — data preparation and evaluation
+- `deploy/`, `app.py` — retained Streamlit fallback
+- `docs/` — deployment, source inventory, architecture and experiment results
 
-## Testing and repository hygiene
+`.env.example`, `.python-version`, `uv.lock`, CI configuration and
+`render.yaml` are intentional public, non-secret reproducibility files.
+Downloaded data, indexes, generated results, runtime credentials and local
+environments are excluded via `.gitignore`.
 
-Every push/PR runs:
+## Security, privacy and limitations
 
-- Python compilation, including the FastAPI service
-- FastAPI import validation
-- React/TypeScript production build
-- notebook/JSON validation
-- unit tests
-- checks preventing local secrets and generated evaluation artifacts from being committed
+The public API enforces bounded inputs, origin restrictions and request limits; the
+frontend uses a restrictive production Content Security Policy. Credentials stay
+server-side. Conversations are held in browser memory for the current visit and
+are not stored in the app database, but question data passes through Render and
+Cloudflare Workers AI for processing.
 
-```bash
-pytest -q tests
-```
+**Do not submit confidential, subscriber-identifying or proprietary network data.**
 
-## Design choices and limitations
-
-- The assistant is a diagnostics/research demo, not a network-operations control system.
-- KPI statistics describe the included reference dataset; they are not universal operator
-  thresholds.
-- Retrieved documentation grounds technical claims, but generated answers can still be
-  imperfect and the source chunks should be inspected for important conclusions.
-- Chat memory is session-only by design.
-- The hosted app requires a seeded Supabase backend and valid Workers AI credentials.
-- Local and hosted retrieval stacks differ, so their benchmark numbers should be reported
-  separately.
+See [Privacy notice](https://telecom.fnsystems.dev/privacy.html),
+[Usage terms](https://telecom.fnsystems.dev/terms.html) and [Security policy](SECURITY.md).
+Infrastructure-level DDoS controls, provider retention and service availability
+remain subject to the hosting platforms.
 
 ## License
 
-[MIT License](LICENSE)
+MIT — see [LICENSE](LICENSE).
