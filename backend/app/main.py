@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import math
 import os
 import sys
 import threading
@@ -13,6 +15,7 @@ from typing import Any, Literal
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -39,6 +42,9 @@ from telecom_rag.supabase_backend import (  # noqa: E402
     supabase_runtime_configured,
 )
 
+logger = logging.getLogger("telecom_rag.api")
+MAX_REQUEST_BYTES = 32 * 1024
+
 PUBLIC_KPI_COLUMNS = [
     "observation_id",
     "timestamp",
@@ -63,7 +69,7 @@ class HistoryMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
-    observation: dict[str, Any] | None = None
+    observation: dict[str, Any] | None = Field(default=None, max_length=24)
     history: list[HistoryMessage] = Field(default_factory=list, max_length=16)
 
 
@@ -80,11 +86,25 @@ class SlidingWindowRateLimiter:
         self.window_seconds = window_seconds
         self._events: dict[str, deque[float]] = defaultdict(deque)
         self._lock = threading.Lock()
+        self._checks = 0
 
     def check(self, key: str) -> int:
         now = time.time()
         cutoff = now - self.window_seconds
         with self._lock:
+            self._checks += 1
+            if self._checks % 100 == 0:
+                for client, times in list(self._events.items()):
+                    while times and times[0] <= cutoff:
+                        times.popleft()
+                    if not times:
+                        del self._events[client]
+            if key not in self._events and len(self._events) >= 5000:
+                raise HTTPException(
+                    status_code=429,
+                    detail="The service is temporarily busy. Please try later.",
+                    headers={"Retry-After": "60"},
+                )
             events = self._events[key]
             while events and events[0] < cutoff:
                 events.popleft()
@@ -92,6 +112,11 @@ class SlidingWindowRateLimiter:
                 raise HTTPException(
                     status_code=429,
                     detail="Request limit reached. Please try again later.",
+                    headers={
+                        "Retry-After": str(
+                            max(1, math.ceil(events[0] + self.window_seconds - now))
+                        )
+                    },
                 )
             events.append(now)
             return self.limit - len(events)
@@ -111,6 +136,9 @@ app = FastAPI(
     title="Telecom-RAG API",
     version="1.0.0",
     description="Hosted API for the 5G network diagnostics RAG assistant.",
+    docs_url=None if os.getenv("RENDER") else "/docs",
+    redoc_url=None,
+    openapi_url=None if os.getenv("RENDER") else "/openapi.json",
 )
 app.add_middleware(
     CORSMiddleware,
@@ -123,17 +151,32 @@ app.add_middleware(
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
+    # Never log prompts or KPI values. Reject oversized chat payloads.
+    if request.method == "POST" and request.url.path == "/api/chat":
+        media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if media_type != "application/json":
+            return JSONResponse(status_code=415, content={"detail": "Expected application/json."})
+        length = request.headers.get("content-length")
+        if length is not None:
+            try:
+                if int(length) > MAX_REQUEST_BYTES:
+                    return JSONResponse(status_code=413, content={"detail": "Request is too large."})
+            except ValueError:
+                return JSONResponse(status_code=400, content={"detail": "Invalid content length."})
+        if len(await request.body()) > MAX_REQUEST_BYTES:
+            return JSONResponse(status_code=413, content={"detail": "Request is too large."})
+
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Frame-Options"] = "DENY"
     return response
 
 
 def _client_key(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        return forwarded.split(",", 1)[0].strip()
+    # Never use raw, caller-supplied X-Forwarded-For for identity.
     return request.client.host if request.client else "unknown"
 
 
@@ -207,14 +250,19 @@ async def health() -> dict[str, Any]:
             "router": os.getenv("CLOUDFLARE_ROUTER_MODEL", CLOUDFLARE_ROUTER_MODEL),
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.warning("Health check failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable.") from exc
 
 
 @app.get("/api/observations")
 async def observations(
     limit: int = Query(default=40, ge=1, le=100),
 ) -> dict[str, Any]:
-    runtime = await asyncio.to_thread(get_runtime)
+    try:
+        runtime = await asyncio.to_thread(get_runtime)
+    except Exception as exc:
+        logger.warning("Observation data unavailable (%s)", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable.") from exc
     if runtime.kpis.empty:
         return {"items": []}
 
@@ -231,7 +279,11 @@ async def observations(
 @app.post("/api/chat")
 async def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
     remaining = rate_limiter.check(_client_key(request))
-    runtime = await asyncio.to_thread(get_runtime)
+    try:
+        runtime = await asyncio.to_thread(get_runtime)
+    except Exception as exc:
+        logger.warning("Chat runtime unavailable (%s)", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable.") from exc
 
     question = payload.question.strip()
     graph_question = conversation_question(
@@ -250,7 +302,10 @@ async def chat(payload: ChatRequest, request: Request) -> dict[str, Any]:
             },
         )
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"RAG request failed: {exc}") from exc
+        logger.warning("RAG request failed (%s)", type(exc).__name__)
+        raise HTTPException(
+            status_code=502, detail="Answer generation failed. Please retry shortly."
+        ) from exc
 
     answer = str(result.get("answer", "")).strip()
     if not answer:
