@@ -21,6 +21,11 @@ function App() {
   const [healthError, setHealthError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [failedRequest, setFailedRequest] = useState<{
+    question: string;
+    observation: Observation | null;
+    history: ChatMessage[];
+  } | null>(null);
   const conversationEnd = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,19 +77,21 @@ function App() {
 
   const activeObservation = mode === "custom" ? customObservation : datasetObservation;
 
-  async function submit(event?: FormEvent) {
-    event?.preventDefault();
-    const cleaned = question.trim();
-    if (!cleaned || loading) return;
-
-    const history = messages;
-    setMessages((current) => [...current, { role: "user", content: cleaned }]);
-    setQuestion("");
+  async function runQuestion(
+    text: string,
+    observation: Observation | null,
+    history: ChatMessage[],
+    appendUser: boolean,
+  ) {
+    if (loading) return;
+    if (appendUser) {
+      setMessages((current) => [...current, { role: "user", content: text }]);
+    }
     setLoading(true);
     setError("");
 
     try {
-      const result = await sendChat(cleaned, activeObservation, history);
+      const result = await sendChat(text, observation, history);
       setMessages((current) => [
         ...current,
         {
@@ -93,11 +100,32 @@ function App() {
           sources: result.sources,
         },
       ]);
+      setFailedRequest(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "The request failed.");
+      setFailedRequest({ question: text, observation, history });
+      setError(err instanceof Error ? err.message : "The request failed. Please retry.");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function submit(event?: FormEvent) {
+    event?.preventDefault();
+    const cleaned = question.trim();
+    if (!cleaned || loading) return;
+
+    setQuestion("");
+    await runQuestion(cleaned, activeObservation, messages, true);
+  }
+
+  function retryFailedQuestion() {
+    if (!failedRequest || loading) return;
+    void runQuestion(
+      failedRequest.question,
+      failedRequest.observation,
+      failedRequest.history,
+      false,
+    );
   }
 
   return (
@@ -153,7 +181,14 @@ function App() {
               <h2>Conversation</h2>
             </div>
             {messages.length > 0 && (
-              <button className="ghost-button" onClick={() => setMessages([])}>
+              <button
+                className="ghost-button"
+                onClick={() => {
+                  setMessages([]);
+                  setError("");
+                  setFailedRequest(null);
+                }}
+              >
                 New chat
               </button>
             )}
@@ -198,7 +233,20 @@ function App() {
             <div ref={conversationEnd} />
           </div>
 
-          {error && <div className="error-banner">{error}</div>}
+          {error && (
+            <div className="error-banner" role="alert">
+              <span>{error}</span>
+              {failedRequest && (
+                <button
+                  type="button"
+                  onClick={retryFailedQuestion}
+                  disabled={loading}
+                >
+                  Retry question
+                </button>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="control-grid">
