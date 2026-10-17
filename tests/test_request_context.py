@@ -42,3 +42,8 @@ def test_conversation_question_bounds_history() -> None:
 
 def test_conversation_question_returns_plain_question_without_history() -> None:
     assert conversation_question("current", []) == "current"
+
+
+def test_sanitize_observation_ignores_non_finite_values() -> None:
+    assert sanitize_observation({"nr_sinr_db": float("nan")}) is None
+    assert sanitize_observation({"nr_rsrp_dbm": float("inf")}) is None
