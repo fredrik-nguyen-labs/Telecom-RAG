@@ -54,7 +54,9 @@ def test_health_does_not_expose_internal_errors(monkeypatch) -> None:
     assert "token" not in response.text
 
 
-def test_early_rejection_exposes_error_only_to_allowed_origins() -> None:
+def test_early_rejection_exposes_error_only_to_allowed_origins(monkeypatch) -> None:
+    # Production uses this allowlisted origin; local tests default to localhost.
+    monkeypatch.setenv("CORS_ORIGINS", "https://telecom.fnsystems.dev")
     response = client.post(
         "/api/chat",
         content="invalid",
