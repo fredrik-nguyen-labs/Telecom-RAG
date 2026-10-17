@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -46,7 +47,9 @@ def sanitize_observation(
         if value is None or value == "":
             continue
         try:
-            cleaned[key] = float(value)
+            number = float(value)
+            if math.isfinite(number):
+                cleaned[key] = number
         except (TypeError, ValueError):
             continue
 
