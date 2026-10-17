@@ -174,3 +174,23 @@ jobs:
 
       - name: Build React frontend
         run: npm run build --prefix frontend
+
+      - name: Verify public site assets and production CSP
+        run: |
+          node - <<'JS'
+          const fs = require("fs");
+          const root = "frontend/dist/";
+          for (const file of ["index.html", "privacy.html", "terms.html", "robots.txt", "sitemap.xml", "favicon.svg"]) {
+            if (!fs.existsSync(root + file)) {
+              throw new Error("Missing public deployment asset: " + file);
+            }
+          }
+          const html = fs.readFileSync(root + "index.html", "utf8");
+          if (!html.includes('http-equiv="Content-Security-Policy"')) {
+            throw new Error("Production HTML is missing Content Security Policy");
+          }
+          if (!html.includes('rel="canonical"')) {
+            throw new Error("Missing canonical site URL");
+          }
+          console.log("Public site assets and CSP verified");
+          JS
