@@ -149,22 +149,36 @@ app.add_middleware(
 )
 
 
+def rejected_request(request: Request, status: int, detail: str) -> JSONResponse:
+    response = JSONResponse(status_code=status, content={"detail": detail})
+    # Keep browser-readable errors for allowed origins even on early rejections.
+    origin = request.headers.get("origin", "")
+    if origin in _cors_origins():
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     # Never log prompts or KPI values. Reject oversized chat payloads.
     if request.method == "POST" and request.url.path == "/api/chat":
         media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
         if media_type != "application/json":
-            return JSONResponse(status_code=415, content={"detail": "Expected application/json."})
+            return rejected_request(request, 415, "Expected application/json.")
         length = request.headers.get("content-length")
         if length is not None:
             try:
                 if int(length) > MAX_REQUEST_BYTES:
-                    return JSONResponse(status_code=413, content={"detail": "Request is too large."})
+                    return rejected_request(request, 413, "Request is too large.")
             except ValueError:
-                return JSONResponse(status_code=400, content={"detail": "Invalid content length."})
+                return rejected_request(request, 400, "Invalid content length.")
         if len(await request.body()) > MAX_REQUEST_BYTES:
-            return JSONResponse(status_code=413, content={"detail": "Request is too large."})
+            return rejected_request(request, 413, "Request is too large.")
 
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
